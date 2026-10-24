@@ -78,6 +78,16 @@ Kết quả đo được trong CI:
 | Chép 3.000 file nhỏ (Linux, FUSE) | 7,21 s (tắt bộ đệm XT) | 1,25 s |
 | Ghi file 512 MB lên RAM disk (macOS, không qua FUSE) | 134 MB/s qua `/dev/disk` | 287 MB/s qua `/dev/rdisk` |
 
+Đo thực tế trên máy thật (MacBook Air M1, macOS 27, macFUSE 5.5 kernel extension, ổ cứng HDD qua USB, 1 GB, bỏ qua bộ nhớ đệm), cùng một ổ:
+
+| Driver | Ghi tuần tự | Đọc tuần tự | File nhỏ (4 KB) |
+|---|---|---|---|
+| Paragon NTFS 17 | 39,1 MB/s | 39,1 MB/s | 164 file/s |
+| XT NTFS 1.0.2 – Cân bằng | 36,1 MB/s | 34,5 MB/s | 83 file/s |
+| XT NTFS 1.0.2 – Turbo | 36,6 MB/s | 36,1 MB/s | 63 file/s |
+
+Trên ổ này XT NTFS **chậm hơn** Paragon (một driver chạy trong kernel): khoảng 7–12% với file lớn và khoảng một nửa với file nhỏ, vì mỗi thao tác đều phải đi vòng qua macFUSE. Hướng cải thiện đang làm: chuyển sang `lowntfs-3g` (API FUSE mức thấp, ít tra cứu đường dẫn hơn), đọc trước và ghi nền song song trong lớp raw I/O.
+
 Tốc độ thực tế phụ thuộc vào ổ và cổng kết nối; hãy dùng tính năng đo tốc độ trong app để so sánh các driver trên chính máy của bạn.
 
 ## Build
