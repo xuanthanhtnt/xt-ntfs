@@ -54,7 +54,7 @@ check "ntfs-3g runs" bash -c "'$ENGINE/ntfs-3g' --version 2>&1 | grep -qi ntfs-3
 
 note ""
 note "## RAM disk"
-DEV="$(hdiutil attach -nomount ram://1572864 | awk '{print $1}')"   # 768 MiB
+DEV="$(hdiutil attach -nomount ram://3145728 | awk '{print $1}')"   # 1.5 GiB
 BSD="${DEV#/dev/}"
 note "RAM disk: $DEV"
 check "partition (MBR)" diskutil partitionDisk "$DEV" MBR "MS-DOS FAT32" XTTEST 100%

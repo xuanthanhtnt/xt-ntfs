@@ -111,7 +111,9 @@ final class DiskMonitor {
                 uuid: uuid,
                 mountPoint: mount?.on,
                 mountFSType: mount?.fsType,
-                readOnly: mount?.readOnly ?? false,
+                // The sealed system snapshot is read-only, but the boot
+                // volume group as a whole is writable (Data volume).
+                readOnly: mount?.on == "/" ? false : (mount?.readOnly ?? false),
                 noBrowse: mount?.noBrowse ?? false,
                 mountedByXT: xtEntry != nil || (mount?.isXT ?? false),
                 isInternal: (d[kDADiskDescriptionDeviceInternalKey as String] as? Bool) ?? false,
@@ -136,7 +138,7 @@ final class DiskMonitor {
             let u = MountTable.usage(of: "/")
             result.append(Volume(bsdName: bsd, name: FileManager.default.displayName(atPath: "/"),
                                  mediaSize: u?.total ?? 0, fsKind: root.fsType, isNTFS: false, uuid: nil,
-                                 mountPoint: "/", mountFSType: root.fsType, readOnly: root.readOnly,
+                                 mountPoint: "/", mountFSType: root.fsType, readOnly: false,
                                  noBrowse: root.noBrowse, mountedByXT: false, isInternal: true,
                                  isEjectable: false, isWholeDisk: false, mediaName: nil, deviceProtocol: nil,
                                  totalBytes: u?.total, freeBytes: u?.free,
