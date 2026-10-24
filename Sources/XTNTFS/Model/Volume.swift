@@ -25,6 +25,8 @@ struct Volume: Identifiable, Equatable {
     var operatingSystem: String?
     /// USB link speed in bits per second (nil if not USB or unknown).
     var linkSpeed: Int64? = nil
+    /// The icon macOS uses for this disk (yellow USB drive, internal...).
+    var iconPath: String? = nil
 
     var isMounted: Bool { mountPoint != nil }
     var devicePath: String { "/dev/" + bsdName }

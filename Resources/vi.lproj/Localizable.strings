@@ -230,3 +230,15 @@
 /* USB link speed */
 "Connection" = "Kết nối";
 "This disk is connected at USB 2.0 speed, which limits it to about 40 MB/s with any NTFS driver. Use a USB 3 cable (5 Gb/s or faster) and plug it straight into the Mac for full speed." = "Ổ này đang kết nối ở tốc độ USB 2.0, nên với driver NTFS nào cũng chỉ đạt khoảng 40 MB/s. Hãy dùng dây USB 3 (5 Gb/s trở lên) và cắm thẳng vào Mac để đạt tốc độ tối đa.";
+
+/* Menu bar panel */
+"Connect an NTFS disk and it appears here." = "Cắm ổ NTFS vào, ổ sẽ hiện ở đây.";
+"Internal" = "Ổ trong";
+"External %@" = "Ổ ngoài %@";
+"External" = "Ổ ngoài";
+"%@ free of %@" = "Trống %@ / %@";
+"Not mounted" = "Chưa mount";
+"Read-only · %@" = "Chỉ đọc · %@";
+"Read-only" = "Chỉ đọc";
+"Read/write · %@" = "Đọc/ghi · %@";
+"Read/write" = "Đọc/ghi";

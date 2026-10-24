@@ -119,7 +119,7 @@ struct SidebarRow: View {
     var body: some View {
         HStack(spacing: 10) {
             StatusDot(status: volume.status)
-            DriveIcon(volume: volume, size: 32)
+            DriveGlyph(volume: volume, size: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text(volume.name)
                     .font(.system(size: 13, weight: .medium))

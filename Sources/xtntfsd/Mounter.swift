@@ -207,11 +207,27 @@ final class Mounter {
             device = (profile == .compatible && backend != .fskit) ? "/dev/" + bsd : "/dev/r" + bsd
             var env = environment(for: profile)
             if backend == .fskit && profile == .compatible { env = ["XTNTFS_CACHE_MB": "0"] }
+            // Volume icon: the one macOS uses for this disk, shown through
+            // libfuse's volicon module (the engine adds it to fuse_new()).
+            if backend == .kernel, let icon = desc.mediaIconPath ?? existing(XTPaths.volumeIconPath),
+               !icon.contains(",") {
+                env["XTNTFS_VOLICON"] = icon
+            }
             Log.info("Mounting \(device) at \(mountPoint) [\(profile.rawValue), \(backend.rawValue)\(readOnly ? ", read-only" : "")]")
             let started = Date()
-            let r = runEngine(bsd: bsd, device: device, mountPoint: mountPoint, options: opts,
+            var r = runEngine(bsd: bsd, device: device, mountPoint: mountPoint, options: opts,
                               env: env, backend: backend)
-            if r.ok && waitForMount(mountPoint, seconds: 2) {
+            var ok = r.ok && waitForMount(mountPoint, seconds: 2)
+            if !ok, env["XTNTFS_VOLICON"] != nil, !r.timedOut {
+                // Never let the icon cost a mount.
+                Log.warn("Mount with a volume icon failed (\(r.combined)); retrying without it")
+                if MountTable.entry(at: mountPoint) != nil { unmountPath(mountPoint, force: true) }
+                env["XTNTFS_VOLICON"] = nil
+                r = runEngine(bsd: bsd, device: device, mountPoint: mountPoint, options: opts,
+                              env: env, backend: backend)
+                ok = r.ok && waitForMount(mountPoint, seconds: 2)
+            }
+            if ok {
                 Log.info("Mounted \(bsd) with \(backend.rawValue) in \(String(format: "%.2f", Date().timeIntervalSince(started))) s")
                 mounted = true
                 usedBackend = backend
@@ -256,6 +272,10 @@ final class Mounter {
         return ownMount
     }
 
+    private func existing(_ path: String) -> String? {
+        FileManager.default.fileExists(atPath: path) ? path : nil
+    }
+
     private func volumeLabel(_ d: DiskDescription) -> String? {
         if let n = d.volumeName, !n.isEmpty { return n }
         let r = Shell.run(System.tool("ntfslabel"), ["--no-action", "/dev/" + d.bsdName], timeout: 30)
@@ -283,9 +303,6 @@ final class Mounter {
             // (No defer_permissions: ntfs-3g adds default_permissions when
             // it maps ownership, and macFUSE rejects the combination.)
             o += ["allow_other", "daemon_timeout=120"]
-            if FileManager.default.fileExists(atPath: XTPaths.volumeIconPath) {
-                o.append("volicon=\(XTPaths.volumeIconPath.replacingOccurrences(of: ",", with: "\\,"))")
-            }
         } else {
             o.append("backend=fskit")
         }

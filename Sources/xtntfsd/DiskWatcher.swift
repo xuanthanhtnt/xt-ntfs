@@ -16,6 +16,8 @@ struct DiskDescription {
     var isInternal: Bool
     var isEjectable: Bool
     var isWritable: Bool
+    /// The icon macOS uses for this disk (see MediaIcon).
+    var mediaIconPath: String?
 
     init(bsdName: String, dict: [String: Any]) {
         self.bsdName = bsdName
@@ -34,6 +36,7 @@ struct DiskDescription {
         isInternal = (dict[kDADiskDescriptionDeviceInternalKey as String] as? Bool) ?? false
         isEjectable = (dict[kDADiskDescriptionMediaEjectableKey as String] as? Bool) ?? false
         isWritable = (dict[kDADiskDescriptionMediaWritableKey as String] as? Bool) ?? true
+        mediaIconPath = MediaIcon.path(description: dict)
     }
 
     var prefsKey: String {

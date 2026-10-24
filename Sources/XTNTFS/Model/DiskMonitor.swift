@@ -127,6 +127,7 @@ final class DiskMonitor {
             if v.deviceProtocol == "USB" {
                 v.linkSpeed = LinkSpeed.bitsPerSecond(bsd: bsd)
             }
+            v.iconPath = MediaIcon.path(description: d)
             if let mp = v.mountPoint, let u = MountTable.usage(of: mp) {
                 v.totalBytes = u.total
                 v.freeBytes = u.free

@@ -16,13 +16,40 @@ enum DriveIcons {
         return nil
     }()
 
+    private static var cache: [String: NSImage] = [:]
+
+    /// The icon macOS itself uses for the disk (like Paragon and Finder):
+    /// the yellow USB drive for USB disks, the internal disk icon, etc.
     static func image(for v: Volume) -> NSImage? {
-        if v.isNTFS, let ntfs { return ntfs }
-        if let mp = v.mountPoint, !v.isNTFS {
-            return NSWorkspace.shared.icon(forFile: mp)
+        // Mounted Mac volumes: Finder's icon (keeps custom volume icons).
+        if let mp = v.mountPoint, !v.isNTFS { return NSWorkspace.shared.icon(forFile: mp) }
+        if let p = v.iconPath {
+            if let img = cache[p] { return img }
+            if let img = NSImage(contentsOfFile: p) {
+                cache[p] = img
+                return img
+            }
         }
         if v.isInternal { return internalDisk ?? external }
         return v.isEjectable ? (removable ?? external) : external
+    }
+
+    /// Line-art glyph for the sidebar and the menu bar list.
+    static func symbol(for v: Volume) -> String {
+        v.isInternal || v.isRootVolume ? "internaldrive" : "externaldrive"
+    }
+}
+
+/// Monochrome drive glyph used in lists (as in Paragon's sidebar).
+struct DriveGlyph: View {
+    var volume: Volume
+    var size: CGFloat = 26
+
+    var body: some View {
+        Image(systemName: DriveIcons.symbol(for: volume))
+            .font(.system(size: size * 0.82, weight: .light))
+            .frame(width: size, height: size)
+            .foregroundStyle(.white.opacity(volume.isMounted ? 0.95 : 0.45))
     }
 }
 
@@ -47,7 +74,8 @@ struct DriveIcon: View {
                     .frame(width: size * 0.8, height: size * 0.8)
                     .frame(width: size, height: size)
             }
-            if showBadge {
+            // NTFS disks show their own icon, like in Finder and Paragon.
+            if showBadge && !volume.isNTFS {
                 FSBadge(volume: volume)
                     .offset(x: size * 0.08, y: -size * 0.04)
             }

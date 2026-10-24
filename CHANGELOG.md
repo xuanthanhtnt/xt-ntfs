@@ -1,5 +1,12 @@
 # Nhật ký thay đổi
 
+## [1.2.0] - 2026-10-25
+
+- **Biểu tượng ổ trong Finder và trên desktop:** ổ mount bằng XT NTFS giờ hiện đúng biểu tượng macOS dùng cho ổ đó (ví dụ ổ USB màu vàng), giống Paragon, thay vì biểu tượng "FUSE" mặc định của macFUSE. Nguyên nhân cũ: macFUSE chỉ nạp mô-đun biểu tượng ổ khi chương trình dùng `fuse_main()`, còn ntfs-3g mount theo cách khác nên tuỳ chọn `volicon` bị bỏ qua. Engine giờ tự nạp mô-đun này; nếu vì lý do nào đó mount kèm biểu tượng thất bại, dịch vụ nền tự mount lại không kèm biểu tượng.
+- **Biểu tượng ổ trong app:** ảnh lớn của ổ dùng biểu tượng thật của macOS (ổ USB, ổ trong…) thay cho hình hộp "NTFS"; thanh bên dùng nét vẽ ổ đĩa đơn sắc như Paragon. Ổ đang mount hiện rõ, ổ chưa mount mờ đi.
+- **Menu bar kiểu Paragon:** bấm biểu tượng trên menu bar mở một bảng liệt kê từng ổ NTFS với biểu tượng, tên, dung lượng trống, kiểu kết nối (ví dụ USB 3 · 5 Gb/s), thanh dung lượng, trạng thái và nút Mount / Unmount / Tháo ổ; nút bánh răng để mở app, cài đặt, kiểm tra cập nhật và thoát.
+- **Thoát app:** khi bật biểu tượng menu bar, chọn Quit trong menu app, trên Dock hoặc ⌘Q chỉ đóng cửa sổ và biểu tượng Dock; XT NTFS vẫn chạy trên menu bar. Chỉ "Thoát XT NTFS" trong bảng menu bar mới thoát hẳn (cập nhật app, đăng xuất và tắt máy vẫn thoát bình thường). Mở lại app từ Launchpad/Spotlight hoặc chọn "Mở XT NTFS" trong menu bar để hiện lại cửa sổ.
+
 ## [1.1.1] - 2026-10-25
 
 - Engine không khởi động luồng nền (ghi nền, đọc trước) trong lúc mount nữa: macFUSE chạy trình mount bằng `fork()`, và tách tiến trình khi đã có nhiều luồng là không an toàn (log engine 1.1.0 có dòng "fuse: forking a threaded process is unsafe"). Các luồng giờ chỉ bắt đầu sau khi macFUSE báo đã mount xong.

@@ -55,6 +55,13 @@ for f in "$SRC/src/ntfs-3g.c" "$SRC/src/lowntfs-3g.c"; do
     [[ "$(grep -cF "$want" "$f")" == 1 ]] || { echo "failed to patch $f ($want)" >&2; exit 1; }
   done
 done
+# Volume icon: macFUSE implements the volicon option as a libfuse module
+# that only fuse_main() sets up; ntfs-3g mounts with fuse_mount() and
+# fuse_new(), so Finder showed macFUSE's generic "FUSE" icon. Load the
+# module in fuse_new() when the helper names an icon in XTNTFS_VOLICON.
+perl -0pi -e 's/(\n\tif \(fuse_opt_add_arg\(&args, ""\) == -1\)\n\t\tgoto err;\n)/$1\tif (xt_volicon_args(&args))\n\t\tgoto err;\n/' "$SRC/src/ntfs-3g.c"
+perl -0pi -e 's/(\nstatic struct fuse \*mount_fuse\(char \*parsed_options\)\n)/\n\/* XT NTFS: "-omodules=volicon,iconpath=PATH" for the volume icon. *\/\nstatic int xt_volicon_args(struct fuse_args *args)\n{\n\tconst char *icon = getenv("XTNTFS_VOLICON");\n\tchar *arg;\n\tsize_t n;\n\tint ret;\n\n\tif (!icon || !*icon || strchr(icon, \x27,\x27))\n\t\treturn 0;\n\tn = strlen(icon) + 32;\n\targ = malloc(n);\n\tif (!arg)\n\t\treturn -1;\n\tsnprintf(arg, n, "-omodules=volicon,iconpath=%s", icon);\n\tret = fuse_opt_add_arg(args, arg);\n\tfree(arg);\n\treturn ret == -1 ? -1 : 0;\n}\n$1/' "$SRC/src/ntfs-3g.c"
+[[ "$(grep -c 'xt_volicon_args' "$SRC/src/ntfs-3g.c")" == 2 ]] || { echo "failed to add the volume icon to ntfs-3g.c" >&2; exit 1; }
 # Install programs into bin/ and sbin/ under the prefix (not /sbin).
 sed -i.bak 's#\$(DESTDIR)/sbin/#$(DESTDIR)$(sbindir)/#g' \
   "$SRC/ntfsprogs/Makefile.am" "$SRC/src/Makefile.am"
