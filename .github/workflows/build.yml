@@ -229,6 +229,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+      - name: Attach pre-signed appcast
+        # A release built without the signing secret can be signed offline:
+        # scripts/make-appcast.py, then commit the result as dist/appcast.xml.
+        if: hashFiles('dist/appcast.xml') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -m pip install --quiet --break-system-packages cryptography 2>/dev/null || python3 -m pip install --quiet cryptography
+          TAG="$(python3 scripts/check-appcast.py dist/appcast.xml Resources/sparkle_public_key.txt)"
+          CURRENT="$RUNNER_TEMP/current-appcast.xml"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --output "$CURRENT" 2>/dev/null || true
+          if ! cmp -s "$CURRENT" dist/appcast.xml; then
+            gh release upload "$TAG" dist/appcast.xml --repo "$GITHUB_REPOSITORY" --clobber
+            echo "Attached dist/appcast.xml to $TAG"
+          fi
       - name: Publish docs/ to the gh-pages branch
         env:
           GH_TOKEN: ${{ github.token }}

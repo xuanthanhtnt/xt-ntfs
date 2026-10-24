@@ -92,7 +92,7 @@ GitHub Actions (`.github/workflows/build.yml`) runs the engine tests, builds the
 1. Add the Sparkle EdDSA private key (base64) as the repository secret `SPARKLE_ED_PRIVATE_KEY` (Settings → Secrets and variables → Actions). Its public half is `Resources/sparkle_public_key.txt`.
 2. Bump `VERSION`, add a section to `CHANGELOG.md` and push to `main`. When CI finds no release for the new version it builds the DMG, creates the `vX.Y.Z` tag and release, and attaches the signed `appcast.xml`. (Pushing a `vX.Y.Z` tag works too.)
 
-Without the secret, the release is still published but is not offered as an in-app update.
+Without the secret, the release is still published but is not offered as an in-app update. It can be signed offline instead: download the DMG, run `SPARKLE_ED_PRIVATE_KEY=… scripts/make-appcast.py <dmg> <version> <build> <url> dist/appcast.xml` and commit `dist/appcast.xml`; CI checks the signature against the published DMG and attaches it to the release.
 
 ## Notes
 
