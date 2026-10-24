@@ -1,6 +1,6 @@
 # Nhật ký thay đổi
 
-## [Chưa phát hành]
+## [1.0.3] - 2026-10-24
 
 - Khi không tháo được ổ vì đang có ứng dụng dùng, app nêu tên các ứng dụng đó và cho phép **Ép tháo** / **Ép đẩy ra** (giống Disk Utility). Trước khi báo lỗi, engine tự thử tháo lại vài lần vì Spotlight, Quick Look hay Finder thường chỉ giữ ổ trong chốc lát.
 - Hiện tốc độ cổng USB của ổ (ví dụ "USB 2.0 · 480 Mb/s") trong thông tin ổ, kèm cảnh báo khi ổ chạy ở tốc độ USB 2.0 (tối đa khoảng 40 MB/s với mọi driver).
