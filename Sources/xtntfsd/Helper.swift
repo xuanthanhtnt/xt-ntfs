@@ -168,6 +168,15 @@ final class Helper: DiskWatcherDelegate {
         case .status:
             return HelperResponse(ok: true, status: status(since: req.sinceEvent ?? 0))
 
+        case .restart:
+            Log.info("Restart requested")
+            // Reply first; launchd (KeepAlive) starts the helper again.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.5) {
+                unlink(XTPaths.socketPath)
+                exit(0)
+            }
+            return HelperResponse(ok: true)
+
         case .setConfig:
             guard let new = req.config else { return HelperResponse(ok: false, error: "Missing configuration.") }
             let old = state.config

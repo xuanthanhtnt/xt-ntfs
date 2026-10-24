@@ -49,6 +49,26 @@ struct EngineView: View {
                 }
             }
         }
+        if model.diskAccessBlocked {
+            Card(title: NSLocalizedString("Allow the engine to access disks", comment: ""), systemImage: "lock.shield.fill", tint: Theme.statusRO) {
+                Text(NSLocalizedString("macOS privacy protection stopped the XT NTFS engine from reading a disk. In Full Disk Access, click +, press Cmd+Shift+G, paste the path below, choose Open and turn the new entry on. Then click Restart Engine. (The XT NTFS app itself does not need this permission.)", comment: ""))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(XTPaths.helperBinary)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .textSelection(.enabled)
+                HStack {
+                    Button(NSLocalizedString("Open Full Disk Access", comment: "")) {
+                        NSWorkspace.shared.open(XTPaths.fullDiskAccessSettings)
+                    }
+                    Button(NSLocalizedString("Copy Path", comment: "")) {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(XTPaths.helperBinary, forType: .string)
+                    }
+                    Button(NSLocalizedString("Restart Engine", comment: "")) { Task { await model.restartEngine() } }
+                        .disabled(model.engineActivity != nil || !model.helperRunning)
+                }
+            }
+        }
         switch model.installState {
         case .notInstalled, .notResponding:
             Card(title: NSLocalizedString("Install the XT NTFS engine", comment: ""), systemImage: "arrow.down.circle.fill", tint: Theme.accent) {
@@ -87,8 +107,14 @@ struct EngineView: View {
                     }
                 }
                 InfoRow(label: NSLocalizedString("Engine service", comment: "")) {
-                    Text(model.status.map { String(format: NSLocalizedString("Running · %@", comment: ""), $0.helperVersion) }
-                         ?? NSLocalizedString("Not running", comment: ""))
+                    HStack(spacing: 8) {
+                        Text(model.status.map { String(format: NSLocalizedString("Running · %@", comment: ""), $0.helperVersion) }
+                             ?? NSLocalizedString("Not running", comment: ""))
+                        if model.helperRunning {
+                            Button(NSLocalizedString("Restart", comment: "")) { Task { await model.restartEngine() } }
+                                .disabled(model.engineActivity != nil)
+                        }
+                    }
                 }
                 InfoRow(label: NSLocalizedString("NTFS engine", comment: "")) {
                     Text(model.status?.engineVersion ?? "—")

@@ -279,6 +279,24 @@ final class AppModel: ObservableObject {
         await refreshStatus(initial: true)
     }
 
+    func restartEngine() async {
+        engineActivity = NSLocalizedString("Restarting engine…", comment: "")
+        defer { engineActivity = nil }
+        _ = try? await HelperClient.send(HelperRequest(command: .restart), timeout: 10)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        for _ in 0..<40 {
+            if await HelperClient.status(since: Int.max) != nil { break }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        await refreshStatus(initial: true)
+    }
+
+    /// True when the helper reported that macOS privacy protection blocked
+    /// access to a disk (the helper needs Full Disk Access).
+    var diskAccessBlocked: Bool {
+        recentEvents.suffix(5).contains { $0.message.hasPrefix("macOS blocked XT NTFS") }
+    }
+
     func uninstallEngine() async {
         engineActivity = NSLocalizedString("Removing engine…", comment: "")
         defer { engineActivity = nil }

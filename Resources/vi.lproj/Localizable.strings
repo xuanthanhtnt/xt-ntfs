@@ -210,3 +210,11 @@
 "XT NTFS could not mount the volume; it was mounted again by the previous driver." = "XT NTFS không mount được ổ; ổ đã được driver trước đó mount lại.";
 "macOS blocked XT NTFS from reading this disk. In System Settings › Privacy & Security › Full Disk Access, add and turn on /Library/PrivilegedHelperTools/com.xuanthanhtnt.xtntfs.helper, then mount again." = "macOS đã chặn XT NTFS đọc ổ này. Vào Cài đặt hệ thống › Quyền riêng tư & Bảo mật › Truy cập toàn bộ ổ đĩa, thêm và bật /Library/PrivilegedHelperTools/com.xuanthanhtnt.xtntfs.helper rồi mount lại.";
 "macOS blocked XT NTFS from reading this disk. Allow /Library/PrivilegedHelperTools/com.xuanthanhtnt.xtntfs.helper in System Settings › Privacy & Security › Full Disk Access." = "macOS đã chặn XT NTFS đọc ổ này. Hãy cho phép /Library/PrivilegedHelperTools/com.xuanthanhtnt.xtntfs.helper trong Cài đặt hệ thống › Quyền riêng tư & Bảo mật › Truy cập toàn bộ ổ đĩa.";
+"Restarting engine…" = "Đang khởi động lại engine…";
+"Restart" = "Khởi động lại";
+"Allow the engine to access disks" = "Cho phép engine truy cập ổ đĩa";
+"macOS privacy protection stopped the XT NTFS engine from reading a disk. In Full Disk Access, click +, press Cmd+Shift+G, paste the path below, choose Open and turn the new entry on. Then click Restart Engine. (The XT NTFS app itself does not need this permission.)" = "Cơ chế bảo vệ quyền riêng tư của macOS đã chặn engine XT NTFS đọc ổ. Trong mục Truy cập toàn bộ ổ đĩa, bấm +, nhấn Cmd+Shift+G, dán đường dẫn bên dưới, chọn Mở rồi bật mục vừa thêm. Sau đó bấm Khởi động lại engine. (Bản thân app XT NTFS không cần quyền này.)";
+"Open Full Disk Access" = "Mở Truy cập toàn bộ ổ đĩa";
+"Copy Path" = "Chép đường dẫn";
+"Restart Engine" = "Khởi động lại engine";
+"The macFUSE kernel extension is not loaded. Allow it in System Settings › Privacy & Security and restart the Mac, or choose the FSKit backend in XT NTFS settings." = "Kernel extension của macFUSE chưa được nạp. Hãy cho phép nó trong Cài đặt hệ thống › Quyền riêng tư & Bảo mật rồi khởi động lại máy, hoặc chọn backend FSKit trong cài đặt XT NTFS.";

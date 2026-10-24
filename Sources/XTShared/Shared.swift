@@ -20,6 +20,7 @@ public enum XTPaths {
     public static let homepage = URL(string: "https://xuanthanhtnt.github.io/xt-ntfs/")!
     public static let releasesPage = URL(string: "https://github.com/xuanthanhtnt/xt-ntfs/releases")!
     public static let macFUSEDownload = URL(string: "https://macfuse.github.io/")!
+    public static let fullDiskAccessSettings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
 }
 
 /// Version of the app/helper wire protocol. Bump on incompatible changes.
@@ -228,6 +229,8 @@ public enum HelperCommand: String, Codable, Sendable {
     case setSpotlight
     case unmountAll
     case mountWithSystem
+    /// Exit; launchd starts the helper again (picks up new permissions).
+    case restart
 }
 
 public enum EraseFormat: String, Codable, CaseIterable, Sendable {

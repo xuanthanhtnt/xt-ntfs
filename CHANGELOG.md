@@ -1,5 +1,16 @@
 # Nhật ký thay đổi
 
+## [1.0.1] - 2026-10-24
+
+Sửa lỗi phát hiện khi cài thử trên máy Mac M1 chạy macOS 27 với macFUSE 5.5.
+
+- Sửa lỗi ổ không mount được với macFUSE 5: ntfs-3g tự tách nền bằng `fork()` sau khi mở kênh FUSE, trong khi macFUSE 5 hoàn tất mount qua XPC nên mount bị bỏ dở. Engine giờ luôn chạy ở chế độ foreground dưới dịch vụ nền.
+- Phát hiện đúng khi macOS chặn engine đọc ổ (quyền riêng tư "Ổ đĩa di động" / Truy cập toàn bộ ổ đĩa) thay vì báo nhầm "Windows đang ngủ đông"; app hiện thẻ hướng dẫn cấp quyền cho dịch vụ nền kèm nút mở thẳng trang cài đặt.
+- Không tháo ổ khỏi driver khác (macOS, Paragon…) khi engine không đọc được ổ; nếu mount bằng XT thất bại thì tự trả ổ về cho driver trước đó.
+- Thêm nút **Khởi động lại engine**.
+- Thêm tuỳ chọn **Lưu thời gian truy cập** cho từng ổ NTFS (giống Paragon); mặc định tắt để nhanh hơn.
+- Báo rõ khi kernel extension của macFUSE chưa được nạp (cần cho phép và khởi động lại máy).
+
 ## [1.0.0] - 2026-10-24
 
 Bản phát hành đầu tiên.

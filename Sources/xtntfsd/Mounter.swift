@@ -206,7 +206,7 @@ final class Mounter {
             let started = Date()
             let r = runEngine(bsd: bsd, device: device, mountPoint: mountPoint, options: opts,
                               env: env, backend: backend)
-            if r.ok && waitForMount(mountPoint, seconds: backend == .fskit ? 20 : 5) {
+            if r.ok && waitForMount(mountPoint, seconds: 2) {
                 Log.info("Mounted \(bsd) with \(backend.rawValue) in \(String(format: "%.2f", Date().timeIntervalSince(started))) s")
                 mounted = true
                 usedBackend = backend
@@ -298,38 +298,48 @@ final class Mounter {
         return o
     }
 
-    /// FSKit engines run in the foreground; keep their Process objects.
+    /// Engines run in the foreground under the helper; keep their Process
+    /// objects for the lifetime of the mount.
     private var foregroundEngines: [String: Process] = [:]
 
-    /// Starts ntfs-3g. With the kernel backend it runs as root and detaches
-    /// once the volume is mounted. FSKit mounts must be made by the
-    /// logged-in user and cannot survive a fork, so the raw device is handed
-    /// to that user for the lifetime of the mount and ntfs-3g runs in the
-    /// foreground in the user's session.
+    /// Starts ntfs-3g and waits until the volume shows up in the mount table.
+    ///
+    /// ntfs-3g normally daemonizes with fork() once the FUSE channel is
+    /// open. macFUSE 5 completes mounts over XPC after the FUSE handshake,
+    /// and that connection does not survive the fork: the parent exits with
+    /// status 0 and the mount never appears. So the engine always runs with
+    /// `no_detach`, as a child of the helper. FSKit mounts must also be made
+    /// by the logged-in user, so for FSKit the raw device is handed to that
+    /// user for the lifetime of the mount and ntfs-3g runs in their session.
     private func runEngine(bsd: String, device: String, mountPoint: String, options: [String],
                            env: [String: String], backend: FUSEBackend) -> CommandResult {
-        guard backend == .fskit else {
-            return Shell.run(System.tool("ntfs-3g"),
-                             [device, mountPoint, "-o", options.joined(separator: ",")],
-                             env: env, timeout: 300)
+        let engineArgs = [device, mountPoint, "-o", (options + ["no_detach"]).joined(separator: ",")]
+        let p = Process()
+        if backend == .fskit {
+            guard let user = System.consoleUser() else {
+                return CommandResult(status: 1, stdout: "",
+                                     stderr: "The FSKit backend needs a logged-in user.", timedOut: false)
+            }
+            System.lendDevice(bsd, uid: user.uid, gid: user.gid)
+            chown(mountPoint, user.uid, user.gid)
+            var command = ["asuser", String(user.uid), "/usr/bin/sudo", "-u", "#\(user.uid)", "--", "/usr/bin/env"]
+            command += env.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+            command.append(System.tool("ntfs-3g"))
+            command += engineArgs
+            p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            p.arguments = command
+        } else {
+            p.executableURL = URL(fileURLWithPath: System.tool("ntfs-3g"))
+            p.arguments = engineArgs
+            var environment = ProcessInfo.processInfo.environment
+            environment["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+            for (k, v) in env { environment[k] = v }
+            p.environment = environment
         }
-        guard let user = System.consoleUser() else {
-            return CommandResult(status: 1, stdout: "",
-                                 stderr: "The FSKit backend needs a logged-in user.", timedOut: false)
-        }
-        System.lendDevice(bsd, uid: user.uid, gid: user.gid)
-        chown(mountPoint, user.uid, user.gid)
 
         let logPath = "/Library/Logs/XTNTFS-\(bsd).log"
         FileManager.default.createFile(atPath: logPath, contents: nil,
                                        attributes: [.posixPermissions: 0o644])
-        var command = ["asuser", String(user.uid), "/usr/bin/sudo", "-u", "#\(user.uid)", "--", "/usr/bin/env"]
-        command += env.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
-        command += [System.tool("ntfs-3g"), device, mountPoint, "-o",
-                    (options + ["no_detach"]).joined(separator: ",")]
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        p.arguments = command
         p.standardInput = FileHandle.nullDevice
         if let log = FileHandle(forWritingAtPath: logPath) {
             p.standardOutput = log
@@ -340,7 +350,7 @@ final class Mounter {
         } catch {
             return CommandResult(status: 127, stdout: "", stderr: error.localizedDescription, timedOut: false)
         }
-        let deadline = Date().addingTimeInterval(30)
+        let deadline = Date().addingTimeInterval(backend == .fskit ? 30 : 20)
         while Date() < deadline {
             if MountTable.entry(at: mountPoint) != nil {
                 foregroundEngines[bsd] = p
@@ -350,8 +360,14 @@ final class Mounter {
             usleep(100_000)
         }
         let timedOut = p.isRunning
-        if timedOut { p.terminate() }
-        let log = (try? String(contentsOfFile: logPath, encoding: .utf8)) ?? ""
+        if timedOut {
+            p.terminate()
+            usleep(500_000)
+        }
+        var log = (try? String(contentsOfFile: logPath, encoding: .utf8)) ?? ""
+        if timedOut && backend != .fskit && !FileManager.default.fileExists(atPath: "/dev/macfuse0") {
+            log += "\nmacFUSE kernel extension is not loaded."
+        }
         return CommandResult(status: timedOut ? -1 : p.terminationStatus, stdout: "",
                              stderr: log, timedOut: timedOut)
     }
@@ -403,6 +419,9 @@ final class Mounter {
     private func explain(_ r: CommandResult, backend: FUSEBackend) -> String {
         let text = r.combined
         let lower = text.lowercased()
+        if lower.contains("kernel extension is not loaded") {
+            return "The macFUSE kernel extension is not loaded. Allow it in System Settings › Privacy & Security and restart the Mac, or choose the FSKit backend in XT NTFS settings."
+        }
         if isFUSEFailure(r) {
             if backend == .fskit {
                 return "macFUSE could not mount the volume with FSKit. Turn on macFUSE in System Settings > General > Login Items & Extensions > File System Extensions, then try again."
