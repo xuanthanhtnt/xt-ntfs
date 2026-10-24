@@ -128,6 +128,8 @@ struct BenchmarkView: View {
         phase = ""
         let size = sizeMB
         Task {
+            // A running usage scan would compete with the benchmark for the disk.
+            await model.stopUsageScans(onDiskOf: v.bsdName)
             let outcome: Result<BenchmarkResult, Error> = await Task.detached(priority: .userInitiated) {
                 do {
                     let res = try r.run(volume: v, sizeMB: size) { p, text in

@@ -124,6 +124,9 @@ final class AppModel: ObservableObject {
             needsEngineAlert()
             return nil
         }
+        if let bsd, Self.unmountingCommands.contains(request.command) {
+            await stopUsageScans(onDiskOf: bsd)
+        }
         if let bsd { busy[bsd] = activity } else { engineActivity = activity }
         defer {
             if let bsd { busy[bsd] = nil } else { engineActivity = nil }
@@ -228,6 +231,7 @@ final class AppModel: ObservableObject {
     func verify(_ v: Volume, repair: Bool = false) async {
         let activity = repair ? NSLocalizedString("Repairing…", comment: "") : NSLocalizedString("Verifying…", comment: "")
         guard helperRunning else { needsEngineAlert(); return }
+        await stopUsageScans(onDiskOf: v.bsdName)
         busy[v.bsdName] = activity
         defer { busy[v.bsdName] = nil }
         do {
@@ -352,6 +356,22 @@ final class AppModel: ObservableObject {
     private func finishUsage(bsd: String, result: UsageBreakdown) {
         usage[bsd] = result
         usageTasks[bsd] = nil
+    }
+
+    /// Commands that unmount the volume (at least for a moment).
+    private static let unmountingCommands: Set<HelperCommand> = [.unmount, .eject, .erase, .rename, .setVolumePrefs]
+
+    /// The usage scan keeps directories on the volume open, which makes an
+    /// unmount fail as "busy". Stop scans of every volume on the same disk
+    /// first; a stopped scan starts again the next time the volume is shown.
+    func stopUsageScans(onDiskOf bsd: String) async {
+        let whole = NTFSNames.wholeDisk(of: bsd)
+        for (key, task) in usageTasks where NTFSNames.wholeDisk(of: key) == whole {
+            task.cancel()
+            _ = await task.value
+            usageTasks[key] = nil
+            usage[key] = nil
+        }
     }
 
     func addBenchmark(_ r: BenchmarkResult) {

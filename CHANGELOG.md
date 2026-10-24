@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## [Chưa phát hành]
+
+- Sửa lỗi không tháo được ổ ngay sau khi mở app: app tự quét dung lượng theo loại file và giữ ổ trong lúc quét. Giờ việc quét được dừng trước khi tháo, đẩy ra, kiểm tra, xoá, đổi tên hay đo tốc độ, rồi tự chạy lại sau đó.
+
 ## [1.0.3] - 2026-10-24
 
 - Khi không tháo được ổ vì đang có ứng dụng dùng, app nêu tên các ứng dụng đó và cho phép **Ép tháo** / **Ép đẩy ra** (giống Disk Utility). Trước khi báo lỗi, engine tự thử tháo lại vài lần vì Spotlight, Quick Look hay Finder thường chỉ giữ ổ trong chốc lát.

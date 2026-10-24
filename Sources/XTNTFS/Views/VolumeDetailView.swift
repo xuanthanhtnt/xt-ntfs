@@ -38,6 +38,8 @@ struct VolumeDetailView: View {
         }
         .onAppear { model.analyzeUsageIfNeeded(volume) }
         .onChange(of: volume.mountPoint) { _ in model.analyzeUsageIfNeeded(volume) }
+        // A scan stopped for an operation starts again once it is done.
+        .onChange(of: busy) { b in if b == nil { model.analyzeUsageIfNeeded(volume) } }
     }
 
     // MARK: Toolbar
