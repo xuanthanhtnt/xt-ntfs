@@ -44,6 +44,17 @@ sed -i.bak 's/^libntfs_3g_la_SOURCES += unix_io.c$/libntfs_3g_la_SOURCES += unix
   "$SRC/libntfs-3g/Makefile.am"
 grep -q 'unix_io.c xt_rawio.c' "$SRC/libntfs-3g/Makefile.am" || {
   echo "failed to patch libntfs-3g/Makefile.am" >&2; exit 1; }
+# Hold back the raw I/O layer's threads until FUSE has mounted the volume:
+# macFUSE's libfuse forks to run its mount helper and a forked threaded
+# process may deadlock. Threads start from the FUSE init callback.
+for f in "$SRC/src/ntfs-3g.c" "$SRC/src/lowntfs-3g.c"; do
+  perl -0pi -e 's/(#include "ntfs-3g_common.h"\n)/$1#include "xt_rawio.h"\n/' "$f"
+  perl -0pi -e 's/(\n\terr = ntfs_open\(opts\.device\);\n)/\n\txt_raw_defer_threads(1);$1/' "$f"
+  perl -0pi -e 's/(static void \*?ntfs_init\([^{]*?\)\n\{\n)/$1\txt_raw_defer_threads(0);\n/' "$f"
+  for want in '#include "xt_rawio.h"' 'xt_raw_defer_threads(1);' 'xt_raw_defer_threads(0);'; do
+    [[ "$(grep -cF "$want" "$f")" == 1 ]] || { echo "failed to patch $f ($want)" >&2; exit 1; }
+  done
+done
 # Install programs into bin/ and sbin/ under the prefix (not /sbin).
 sed -i.bak 's#\$(DESTDIR)/sbin/#$(DESTDIR)$(sbindir)/#g' \
   "$SRC/ntfsprogs/Makefile.am" "$SRC/src/Makefile.am"

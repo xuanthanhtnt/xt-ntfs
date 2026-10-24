@@ -75,6 +75,16 @@ s64 xt_raw_seek(struct xt_raw *r, s64 offset, int whence);
 s64 xt_raw_read(struct xt_raw *r, void *buf, s64 count);
 s64 xt_raw_write(struct xt_raw *r, const void *buf, s64 count);
 
+/*
+ * While deferred, no background thread (flusher, read-ahead) is started;
+ * dirty data is written synchronously once the dirty limit is reached.
+ * ntfs-3g defers from before it opens the volume until FUSE has mounted
+ * it: macFUSE's libfuse forks to run its mount helper, which is unsafe in
+ * a process that has other threads. Undeferring starts the flushers that
+ * have dirty data waiting.
+ */
+void xt_raw_defer_threads(int defer);
+
 /* Write back all dirty cached data (does not issue a device cache flush). */
 int xt_raw_flush(struct xt_raw *r);
 

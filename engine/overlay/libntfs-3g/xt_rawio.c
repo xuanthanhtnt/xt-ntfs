@@ -84,6 +84,7 @@
 #define XT_DEF_RA_THREADS	2u
 #define XT_RA_MAX_THREADS	4u
 #define XT_RA_MIN_REQ		(64u << 10)	/* smaller reads: metadata */
+#define XT_RA_MIN_STREAM	(1u << 20)	/* read in order before read-ahead */
 #define XT_NBUCKETS		10
 
 enum { XT_RA_FREE, XT_RA_QUEUED, XT_RA_LOADING, XT_RA_READY };
@@ -153,6 +154,7 @@ struct xt_raw {
 	u32 ra_nthreads;
 	struct xt_ra_slot *ra_slots;
 	s64 ra_next;			/* where a sequential reader goes next */
+	s64 ra_stream;			/* bytes read in order so far */
 	pthread_cond_t ra_work;		/* reader threads: slots queued */
 	pthread_cond_t ra_done;		/* consumers: a slot finished */
 	pthread_t ra_thr[XT_RA_MAX_THREADS];
@@ -173,6 +175,12 @@ struct xt_raw {
 
 static pthread_mutex_t xt_reg_mtx = PTHREAD_MUTEX_INITIALIZER;
 static struct xt_raw *xt_reg_head;
+static int xt_threads_deferred;		/* see xt_raw_defer_threads() */
+
+static int threads_deferred(void)
+{
+	return __atomic_load_n(&xt_threads_deferred, __ATOMIC_SEQ_CST);
+}
 static pthread_once_t xt_atfork_once = PTHREAD_ONCE_INIT;
 
 static int flush_all_locked(struct xt_raw *r);
@@ -826,7 +834,7 @@ static void ensure_flusher(struct xt_raw *r)
 {
 	pid_t me;
 
-	if (r->no_thread || r->closing)
+	if (r->no_thread || r->closing || threads_deferred())
 		return;
 	me = getpid();
 	if (r->thr_running && r->thr_pid == me)
@@ -1245,7 +1253,8 @@ static void ensure_ra_threads(struct xt_raw *r)
 {
 	pid_t me = getpid();
 
-	if (r->closing || (r->ra_running && r->ra_pid == me))
+	if (r->closing || threads_deferred() ||
+	    (r->ra_running && r->ra_pid == me))
 		return;
 	r->ra_pid = me;
 	r->ra_running = 0;
@@ -1590,10 +1599,18 @@ s64 xt_raw_pread(struct xt_raw *r, void *buf, s64 count, s64 offset)
 	if (count > r->devsize - offset)
 		count = r->devsize - offset;
 	r->st_rd[size_bucket(count)]++;
-	/* File data read in order: serve it from read-ahead. */
-	if (r->ra_nthreads && count >= (s64)XT_RA_MIN_REQ) {
-		if (offset == r->ra_next)
-			pre = ra_read(r, buf, count, offset);
+	/*
+	 * File data read in order (at least a megabyte of it): serve it from
+	 * read-ahead.
+	 */
+	if (r->ra_nthreads && count >= (s64)XT_RA_MIN_REQ && !threads_deferred()) {
+		if (offset == r->ra_next) {
+			if (r->ra_stream >= (s64)XT_RA_MIN_STREAM)
+				pre = ra_read(r, buf, count, offset);
+			r->ra_stream += count;
+		} else {
+			r->ra_stream = count;
+		}
 		r->ra_next = offset + count;
 		if (pre == count) {
 			ret = pre;
@@ -1691,6 +1708,24 @@ s64 xt_raw_write(struct xt_raw *r, const void *buf, s64 count)
 	if (n > 0)
 		r->pos += n;
 	return n;
+}
+
+void xt_raw_defer_threads(int defer)
+{
+	struct xt_raw *r;
+
+	__atomic_store_n(&xt_threads_deferred, defer ? 1 : 0, __ATOMIC_SEQ_CST);
+	if (defer)
+		return;
+	/* Start the flushers that writes made in the meantime asked for. */
+	pthread_mutex_lock(&xt_reg_mtx);
+	for (r = xt_reg_head; r; r = r->reg_next) {
+		pthread_mutex_lock(&r->mtx);
+		if (r->dirty_bytes)
+			ensure_flusher(r);
+		pthread_mutex_unlock(&r->mtx);
+	}
+	pthread_mutex_unlock(&xt_reg_mtx);
 }
 
 int xt_raw_flush(struct xt_raw *r)

@@ -78,14 +78,21 @@ Kết quả đo được trong CI:
 | Chép 3.000 file nhỏ (Linux, FUSE) | 7,21 s (tắt bộ đệm XT) | 1,25 s |
 | Ghi file 512 MB lên RAM disk (macOS, không qua FUSE) | 134 MB/s qua `/dev/disk` | 287 MB/s qua `/dev/rdisk` |
 
-Đo thực tế trên máy thật (MacBook Air M1, macOS 27, macFUSE 5.5 kernel extension, ổ cứng HDD 500 GB qua USB, file 1 GB, bỏ qua bộ nhớ đệm), cùng một ổ, trung bình 2 lần đo mỗi driver:
+Đo thực tế trên máy thật (MacBook Air M1, macOS 27, macFUSE 5.5 kernel extension), bằng công cụ đo trong app (ghi/đọc tuần tự bỏ qua bộ nhớ đệm, tạo 500 file 4 KB rồi fsync), cùng một ổ, xen kẽ hai driver:
+
+**Ổ SSD 128 GB qua USB 3 (5 Gb/s)**, file thử 256 MB đến 4 GB, mỗi driver 5–8 lần đo:
 
 | Driver | Ghi tuần tự | Đọc tuần tự | File nhỏ (4 KB) |
 |---|---|---|---|
-| Paragon NTFS 17 | 37,4 MB/s | 37,9 MB/s | 204 file/s |
-| XT NTFS 1.0.2 – Cân bằng | 37,9 MB/s | 38,5 MB/s | 117 file/s |
+| Paragon NTFS 17 | 139–166 MB/s | 225–227 MB/s | 783–889 file/s ¹ |
+| XT NTFS 1.0.4 – Cân bằng | 139 MB/s | 204–205 MB/s | 391–408 file/s |
+| **XT NTFS 1.1 – Cân bằng** | 138–186 MB/s | 224–228 MB/s | **1.466–2.359 file/s** |
 
-Ổ này chạy ở tốc độ USB 2.0, nên cả hai driver đều chạm trần khoảng 38–40 MB/s: với file lớn XT NTFS ngang Paragon (nhỉnh hơn 1–2%, trong sai số đo). Với file nhỏ XT NTFS chỉ đạt khoảng 57% tốc độ của Paragon (một driver chạy trong kernel), vì mỗi thao tác tạo/đóng file đều phải đi vòng qua macFUSE. Hướng cải thiện đang làm: chuyển sang `lowntfs-3g` (API FUSE mức thấp, ít tra cứu đường dẫn hơn), đọc trước và ghi nền song song trong lớp raw I/O.
+¹ Hai lần đo 4 GB ngay sau một loạt ghi lớn, Paragon chỉ đạt 379–388 file/s.
+
+Với ổ này, ghi và đọc tuần tự của cả hai driver đều chạm giới hạn của chính ổ (khoảng 140–150 MB/s ghi, 226 MB/s đọc). Tạo file nhỏ XT NTFS 1.1 nhanh hơn Paragon khoảng 1,6–2,8 lần. Hai thay đổi trong engine 1.1 làm nên khác biệt so với 1.0.4: đọc trước khi đọc tuần tự (đọc +11%), và ghi file mới không cần đọc trước vùng xung quanh từ ổ (file nhỏ gấp 3,6–6 lần).
+
+**Ổ HDD 500 GB qua USB 2.0**, file thử 1 GB, trung bình 2 lần đo (bản 1.0.2): Paragon 37,4 / 37,9 MB/s, 204 file/s; XT NTFS 37,9 / 38,5 MB/s, 117 file/s. Ở USB 2.0 cả hai driver đều kẹt ở khoảng 38–40 MB/s. Dòng **Kết nối** trong thông tin ổ (từ bản 1.0.3) cho biết ngay ổ đang chạy USB 2.0 hay USB 3 và cảnh báo khi dây hoặc cổng làm chậm ổ.
 
 Tốc độ thực tế phụ thuộc vào ổ và cổng kết nối; hãy dùng tính năng đo tốc độ trong app để so sánh các driver trên chính máy của bạn.
 

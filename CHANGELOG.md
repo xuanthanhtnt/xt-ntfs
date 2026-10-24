@@ -1,5 +1,11 @@
 # Nhật ký thay đổi
 
+## [1.1.1] - 2026-10-25
+
+- Engine không khởi động luồng nền (ghi nền, đọc trước) trong lúc mount nữa: macFUSE chạy trình mount bằng `fork()`, và tách tiến trình khi đã có nhiều luồng là không an toàn (log engine 1.1.0 có dòng "fuse: forking a threaded process is unsafe"). Các luồng giờ chỉ bắt đầu sau khi macFUSE báo đã mount xong.
+- Đọc trước chỉ bật sau khi đã đọc tuần tự ít nhất 1 MB, để các lần đọc lẻ không làm tốn băng thông ổ.
+- README: bảng đo thực tế trên ổ SSD USB 3 so với Paragon NTFS.
+
 ## [1.1.0] - 2026-10-24
 
 Tăng tốc engine, dựa trên số đo thực tế so với Paragon NTFS trên ổ SSD USB 3.
