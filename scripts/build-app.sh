@@ -75,21 +75,25 @@ chmod 755 "$APP/Contents/Resources/scripts/"*.sh
 cp "$ENGINE"/* "$APP/Contents/Resources/engine/"
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/LICENSE.txt"
 
-log "Signing (ad-hoc)"
+# A fixed signing identity keeps the code requirement stable across
+# updates, so macOS privacy grants (Full Disk Access for the helper) survive
+# them. Without one the bundle is signed ad hoc.
+SIGN="${XT_SIGN_IDENTITY:--}"
+log "Signing (${XT_SIGN_IDENTITY:-ad hoc})"
 for f in "$APP/Contents/Resources/engine/"*; do
   if file "$f" | grep -q "Mach-O"; then
-    codesign --force --sign - --timestamp=none "$f"
+    codesign --force --sign "$SIGN" --timestamp=none "$f"
   fi
 done
 SFW="$APP/Contents/Frameworks/Sparkle.framework"
 for x in "$SFW"/Versions/B/XPCServices/*.xpc; do
-  [ -e "$x" ] && codesign --force --sign - --timestamp=none "$x"
+  [ -e "$x" ] && codesign --force --sign "$SIGN" --timestamp=none "$x"
 done
-[ -e "$SFW/Versions/B/Autoupdate" ] && codesign --force --sign - --timestamp=none "$SFW/Versions/B/Autoupdate"
-[ -e "$SFW/Versions/B/Updater.app" ] && codesign --force --sign - --timestamp=none "$SFW/Versions/B/Updater.app"
-codesign --force --sign - --timestamp=none "$SFW"
-codesign --force --sign - --timestamp=none --identifier com.xuanthanhtnt.xtntfs.helper "$APP/Contents/MacOS/xtntfsd"
-codesign --force --sign - --timestamp=none "$APP"
+[ -e "$SFW/Versions/B/Autoupdate" ] && codesign --force --sign "$SIGN" --timestamp=none "$SFW/Versions/B/Autoupdate"
+[ -e "$SFW/Versions/B/Updater.app" ] && codesign --force --sign "$SIGN" --timestamp=none "$SFW/Versions/B/Updater.app"
+codesign --force --sign "$SIGN" --timestamp=none "$SFW"
+codesign --force --sign "$SIGN" --timestamp=none --identifier com.xuanthanhtnt.xtntfs.helper "$APP/Contents/MacOS/xtntfsd"
+codesign --force --sign "$SIGN" --timestamp=none "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
 log "Bundle contents"

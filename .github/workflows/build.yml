@@ -110,6 +110,17 @@ jobs:
           swift --version
       - name: Unit tests
         run: scripts/ci-run.sh swift test
+      - name: Code signing identity
+        env:
+          XT_CODESIGN_P12: ${{ secrets.XT_CODESIGN_P12 }}
+          XT_CODESIGN_PASSWORD: ${{ secrets.XT_CODESIGN_PASSWORD }}
+        run: |
+          # Optional fixed (self-signed) certificate, see README "Signing".
+          if [ -z "$XT_CODESIGN_P12" ]; then echo "No signing certificate; signing ad hoc."; exit 0; fi
+          echo "$XT_CODESIGN_P12" | base64 --decode > "$RUNNER_TEMP/xt.p12"
+          NAME="$(scripts/setup-signing.sh "$RUNNER_TEMP/xt.p12" "$XT_CODESIGN_PASSWORD" "$RUNNER_TEMP/xt-signing.keychain-db")"
+          rm -f "$RUNNER_TEMP/xt.p12"
+          echo "XT_SIGN_IDENTITY=$NAME" >> "$GITHUB_ENV"
       - name: Build app
         run: |
           chmod +x "$RUNNER_TEMP"/engine/* || true
@@ -123,6 +134,23 @@ jobs:
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Signing self-test (throwaway certificate)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.XT_SIGN_IDENTITY == ''
+        continue-on-error: true
+        run: |
+          O="$(brew --prefix openssl@3)/bin/openssl"
+          T="$RUNNER_TEMP/signtest"; mkdir -p "$T"
+          "$O" req -x509 -newkey rsa:2048 -sha256 -days 2 -nodes -keyout "$T/k.pem" -out "$T/c.pem" \
+            -subj "/CN=XT NTFS Test Signing" -addext "basicConstraints=critical,CA:FALSE" \
+            -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=critical,codeSigning"
+          "$O" pkcs12 -export -legacy -inkey "$T/k.pem" -in "$T/c.pem" -name "XT NTFS Test Signing" -out "$T/t.p12" -passout pass:test
+          NAME="$(scripts/setup-signing.sh "$T/t.p12" test "$T/test.keychain-db")"
+          echo "identity: $NAME"
+          ditto "build/XT NTFS.app" "$T/XT NTFS.app"
+          codesign --force --sign "$NAME" --timestamp=none --identifier com.xuanthanhtnt.xtntfs.helper "$T/XT NTFS.app/Contents/MacOS/xtntfsd"
+          codesign -dr - "$T/XT NTFS.app/Contents/MacOS/xtntfsd" 2>&1 | tee "$T/req.txt"
+          grep -q "certificate leaf" "$T/req.txt"
+          echo "::notice title=Signing self-test::$(tr '\n' ' ' < "$T/req.txt")"
       - name: Release decision
         id: rel
         env:

@@ -101,6 +101,15 @@ GitHub Actions (`.github/workflows/build.yml`) chạy kiểm thử engine, build
 
 Nếu chưa có secret, bản phát hành vẫn được tạo nhưng không được đẩy tới người dùng qua tự cập nhật. Khi đó có thể ký thủ công: tải DMG về, chạy `SPARKLE_ED_PRIVATE_KEY=… scripts/make-appcast.py <dmg> <phiên bản> <số build> <url> dist/appcast.xml` rồi commit `dist/appcast.xml`; CI sẽ kiểm tra chữ ký với DMG đã phát hành rồi đính kèm vào bản phát hành.
 
+### Ký app bằng chứng chỉ cố định (khuyến nghị)
+
+Mặc định app được ký ad-hoc, nên mỗi bản build có "dấu vân tay" khác nhau và macOS coi dịch vụ nền là chương trình mới: sau mỗi lần cập nhật engine phải bật lại quyền **Truy cập toàn bộ ổ đĩa** cho `com.xuanthanhtnt.xtntfs.helper`. Ký bằng một chứng chỉ cố định (tự tạo cũng được) giúp quyền này được giữ qua các bản cập nhật:
+
+1. Tạo chứng chỉ ký code tự ký (ví dụ bằng OpenSSL, `extendedKeyUsage=codeSigning`, CN tuỳ ý) và xuất ra file `.p12` có mật khẩu (`openssl pkcs12 -export -legacy …`).
+2. Thêm hai secret cho repo: `XT_CODESIGN_P12` (nội dung file `.p12` dạng base64) và `XT_CODESIGN_PASSWORD`.
+
+CI sẽ nạp chứng chỉ bằng `scripts/setup-signing.sh` và ký app, engine, dịch vụ nền bằng nó. Lần đầu chuyển từ ad-hoc sang chứng chỉ vẫn cần bật lại quyền một lần; từ đó trở đi thì không cần nữa. Chứng chỉ Developer ID của Apple còn tốt hơn: app được notarize và không bị Gatekeeper cảnh báo.
+
 ## Lưu ý
 
 - Luôn tháo (Eject) ổ NTFS trước khi rút ra.
