@@ -25,7 +25,7 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q autoconf automake libtool pkg-config fuse3 libgcrypt20-dev
       - name: Build engine
-        run: engine/build-ntfs3g.sh "$RUNNER_TEMP/xt"
+        run: scripts/ci-run.sh engine/build-ntfs3g.sh "$RUNNER_TEMP/xt"
       - name: Randomized I/O layer stress test (ASan/UBSan, fork, eviction)
         run: |
           SRC="$RUNNER_TEMP/xt/.work/src"
@@ -64,11 +64,11 @@ jobs:
       - name: Fetch macFUSE SDK
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: engine/fetch-macfuse-sdk.sh "$RUNNER_TEMP/macfuse"
+        run: scripts/ci-run.sh engine/fetch-macfuse-sdk.sh "$RUNNER_TEMP/macfuse"
       - name: Build engine
         env:
           MACFUSE_PREFIX: ${{ runner.temp }}/macfuse
-        run: engine/build-ntfs3g.sh "$RUNNER_TEMP/engine"
+        run: scripts/ci-run.sh engine/build-ntfs3g.sh "$RUNNER_TEMP/engine"
       - uses: actions/upload-artifact@v4
         with:
           name: engine-macos
@@ -95,17 +95,17 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Unit tests
-        run: swift test
+        run: scripts/ci-run.sh swift test
       - name: Build app
         run: |
           chmod +x "$RUNNER_TEMP"/engine/* || true
-          scripts/build-app.sh "$RUNNER_TEMP/engine" build
+          scripts/ci-run.sh scripts/build-app.sh "$RUNNER_TEMP/engine" build
       - name: Make DMG
         id: dmg
         run: |
           VERSION="$(cat VERSION | tr -d '[:space:]')"
           DMG="build/XT-NTFS-$VERSION.dmg"
-          scripts/make-dmg.sh "build/XT NTFS.app" "$DMG"
+          scripts/ci-run.sh scripts/make-dmg.sh "build/XT NTFS.app" "$DMG"
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"

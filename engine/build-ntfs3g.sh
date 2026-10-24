@@ -95,7 +95,7 @@ esac
 log "configure ${CONF[*]}"
 ./configure "${CONF[@]}" >"$WORK/configure.log" 2>&1 || { tail -60 "$WORK/configure.log"; exit 1; }
 log "make -j$JOBS"
-make -j"$JOBS" >"$WORK/make.log" 2>&1 || { grep -iE 'error|warning: implicit' "$WORK/make.log" | tail -40; exit 1; }
+make -j"$JOBS" >"$WORK/make.log" 2>&1 || { grep -iE -B2 -A3 'error' "$WORK/make.log" | tail -120; exit 1; }
 grep -E 'xt_rawio|unix_io' "$WORK/make.log" | grep -iE 'warning' || true
 
 log "Collecting binaries"
