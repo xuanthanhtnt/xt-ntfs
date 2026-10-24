@@ -35,6 +35,14 @@ final class SharedTests: XCTestCase {
         XCTAssertEqual(c.profile, .turbo)
         XCTAssertEqual(c.dirtyPolicy, .verifyBeforeMount)
         XCTAssertTrue(c.windowsNames)
+        XCTAssertEqual(c.backend, .automatic)
+    }
+
+    func testManagedMountWithoutBackendDecodes() throws {
+        let json = #"{"bsdName":"disk4s1","devicePath":"/dev/rdisk4s1","mountPoint":"/Volumes/D","volumeName":"D","readOnly":false,"profile":"balanced","mountedAt":0}"#
+        let m = try XTCoding.decoder().decode(ManagedMount.self, from: Data(json.utf8))
+        XCTAssertNil(m.backend)
+        XCTAssertEqual(m.profile, .balanced)
     }
 
     func testRequestRoundTrip() throws {

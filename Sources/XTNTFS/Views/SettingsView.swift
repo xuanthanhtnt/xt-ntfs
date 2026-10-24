@@ -94,6 +94,11 @@ struct GeneralSettings: View {
                     set: { v in Task { await model.updateConfig { $0.profile = v } } })) {
                     ForEach(PerformanceProfile.allCases, id: \.self) { Text(ProfileText.name($0)).tag($0) }
                 }
+                Picker(NSLocalizedString("macFUSE backend:", comment: ""), selection: Binding(
+                    get: { model.config.backend },
+                    set: { v in Task { await model.updateConfig { $0.backend = v } } })) {
+                    ForEach(FUSEBackend.allCases, id: \.self) { Text(BackendText.name($0)).tag($0) }
+                }
                 Toggle(NSLocalizedString("Only allow file names that Windows accepts", comment: ""), isOn: Binding(
                     get: { model.config.windowsNames },
                     set: { v in Task { await model.updateConfig { $0.windowsNames = v } } }))

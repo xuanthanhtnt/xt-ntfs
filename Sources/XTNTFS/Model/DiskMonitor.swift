@@ -67,8 +67,10 @@ final class DiskMonitor {
             let content = (d[kDADiskDescriptionMediaContentKey as String] as? String) ?? ""
             let daName = d[kDADiskDescriptionVolumeNameKey as String] as? String
             let entries = table.filter { $0.bsdName == bsd }
-            let mount = entries.first(where: { $0.isXT }) ?? entries.first
             let xt = xtMounts.first { $0.bsdName == bsd }
+            // An FSKit-backed XT mount may not name the device it serves.
+            let xtEntry = xt.flatMap { x in table.first { $0.on == x.mountPoint } }
+            let mount = xtEntry ?? entries.first(where: { $0.isXT }) ?? entries.first
 
             // Skip partition maps, APFS containers, EFI and similar.
             let hasFS = !kind.isEmpty || mount != nil
@@ -85,7 +87,7 @@ final class DiskMonitor {
             if mount == nil && internal && kind.lowercased() == "apfs" { continue }
 
             let lowerKind = kind.lowercased()
-            let isNTFS = lowerKind.contains("ntfs") || (mount?.isXT ?? false)
+            let isNTFS = lowerKind.contains("ntfs") || (mount?.isXT ?? false) || xtEntry != nil
                 || (lowerKind.isEmpty && content == "Windows_NTFS")
 
             var uuid: String?
@@ -111,7 +113,7 @@ final class DiskMonitor {
                 mountFSType: mount?.fsType,
                 readOnly: mount?.readOnly ?? false,
                 noBrowse: mount?.noBrowse ?? false,
-                mountedByXT: mount?.isXT ?? false,
+                mountedByXT: xtEntry != nil || (mount?.isXT ?? false),
                 isInternal: (d[kDADiskDescriptionDeviceInternalKey as String] as? Bool) ?? false,
                 isEjectable: ((d[kDADiskDescriptionMediaEjectableKey as String] as? Bool) ?? false)
                     || ((d[kDADiskDescriptionMediaRemovableKey as String] as? Bool) ?? false)

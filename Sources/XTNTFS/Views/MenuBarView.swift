@@ -28,11 +28,18 @@ struct MenuBarView: View {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "main")
         }
-        Button(NSLocalizedString("Settings…", comment: "")) {
-            NSApp.activate(ignoringOtherApps: true)
-            AppActions.openSettings()
+        if #available(macOS 14.0, *) {
+            SettingsLink {
+                Text(NSLocalizedString("Settings…", comment: ""))
+            }
+            .keyboardShortcut(",")
+        } else {
+            Button(NSLocalizedString("Settings…", comment: "")) {
+                NSApp.activate(ignoringOtherApps: true)
+                AppActions.openSettings()
+            }
+            .keyboardShortcut(",")
         }
-        .keyboardShortcut(",")
         Button(NSLocalizedString("Check for Updates…", comment: "")) { updater.checkForUpdates() }
             .disabled(!updater.canCheckForUpdates)
         Divider()

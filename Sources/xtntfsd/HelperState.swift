@@ -12,6 +12,7 @@ final class HelperState {
 
     init() {
         _config = HelperState.loadConfig()
+        for m in HelperState.loadMounts() { mounts[m.bsdName] = m }
     }
 
     var config: EngineConfig {
@@ -30,7 +31,8 @@ final class HelperState {
     // MARK: Mounts
 
     func setMount(_ m: ManagedMount) {
-        lock.lock(); mounts[m.bsdName] = m; lock.unlock()
+        lock.lock(); mounts[m.bsdName] = m; let all = Array(mounts.values); lock.unlock()
+        HelperState.saveMounts(all)
     }
 
     func mount(bsd: String) -> ManagedMount? {
@@ -39,7 +41,8 @@ final class HelperState {
     }
 
     func removeMount(bsd: String) {
-        lock.lock(); mounts[bsd] = nil; lock.unlock()
+        lock.lock(); mounts[bsd] = nil; let all = Array(mounts.values); lock.unlock()
+        HelperState.saveMounts(all)
     }
 
     /// Records an XT mount found in the mount table (e.g. after a restart).
@@ -55,15 +58,24 @@ final class HelperState {
         return m
     }
 
-    /// Drops records whose mount has disappeared.
+    /// Drops records whose mount has disappeared and adopts XT mounts found
+    /// in the mount table (e.g. after the helper restarted).
     func reconcile() {
-        let table = MountTable.entries().filter { $0.isXT }
+        let table = MountTable.entries()
         lock.lock()
-        for (bsd, m) in mounts where !table.contains(where: { $0.on == m.mountPoint }) {
-            mounts[bsd] = nil
+        var changed = false
+        for (bsd, m) in mounts {
+            // Gone, or the mount point now belongs to another device.
+            let e = table.first { $0.on == m.mountPoint }
+            if e == nil || (e?.bsdName != nil && e?.bsdName != bsd) {
+                mounts[bsd] = nil
+                changed = true
+            }
         }
+        let all = Array(mounts.values)
         lock.unlock()
-        for e in table { recordMount(from: e, profile: config.profile) }
+        if changed { HelperState.saveMounts(all) }
+        for e in table where e.isXT { recordMount(from: e, profile: config.profile) }
     }
 
     var allMounts: [ManagedMount] {
@@ -96,6 +108,19 @@ final class HelperState {
             return EngineConfig()
         }
         return c
+    }
+
+    private static var mountsPath: String { XTPaths.supportDir + "/mounts.json" }
+
+    private static func loadMounts() -> [ManagedMount] {
+        guard let data = FileManager.default.contents(atPath: mountsPath),
+              let list = try? XTCoding.decoder().decode([ManagedMount].self, from: data) else { return [] }
+        return list
+    }
+
+    private static func saveMounts(_ list: [ManagedMount]) {
+        guard let data = try? XTCoding.encoder().encode(list) else { return }
+        try? data.write(to: URL(fileURLWithPath: mountsPath), options: .atomic)
     }
 
     private static func saveConfig(_ c: EngineConfig) {

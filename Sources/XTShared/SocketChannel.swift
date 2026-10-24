@@ -18,7 +18,7 @@ public enum HelperSocketError: Error, LocalizedError {
         case .badReply(let s):
             return String(format: NSLocalizedString("Unexpected reply from the engine: %@", comment: ""), s)
         case .failed(let s):
-            return s
+            return NSLocalizedString(s, comment: "")
         }
     }
 }

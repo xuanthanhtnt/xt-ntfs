@@ -46,6 +46,7 @@ struct Volume: Identifiable, Equatable {
 
     var driverName: String? {
         guard let t = mountFSType else { return nil }
+        if mountedByXT { return "XT NTFS" }
         return MountEntry(from: devicePath, on: mountPoint ?? "", fsType: t, readOnly: readOnly,
                           noBrowse: noBrowse, totalBytes: 0, freeBytes: 0).driverName
     }

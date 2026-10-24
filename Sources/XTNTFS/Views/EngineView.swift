@@ -38,6 +38,9 @@ struct EngineView: View {
             Card(title: NSLocalizedString("macFUSE is required", comment: ""), systemImage: "puzzlepiece.extension.fill", tint: Theme.statusRO) {
                 Text(NSLocalizedString("XT NTFS runs its NTFS engine on macFUSE. Install macFUSE, allow its system extension in System Settings › Privacy & Security, then restart if asked. Macs with Apple silicon must allow kernel extensions in Startup Security Utility first (the same step Paragon NTFS requires).", comment: ""))
                     .fixedSize(horizontal: false, vertical: true)
+                Text(NSLocalizedString("On macOS 26 and later you can skip the kernel extension: turn on macFUSE in System Settings › General › Login Items & Extensions › File System Extensions and XT NTFS uses the FSKit backend.", comment: ""))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.secondary)
                 HStack {
                     Button(NSLocalizedString("Download macFUSE", comment: "")) { NSWorkspace.shared.open(XTPaths.macFUSEDownload) }
                     Button(NSLocalizedString("Open Privacy & Security", comment: "")) {
@@ -125,6 +128,23 @@ struct EngineView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text(NSLocalizedString("The profile applies to volumes mounted from now on. Unmount and mount a volume to switch it.", comment: ""))
                 .font(.system(size: 11)).foregroundStyle(.secondary)
+            Divider().padding(.vertical, 2)
+            HStack(spacing: 10) {
+                Text(NSLocalizedString("macFUSE backend:", comment: ""))
+                Picker("", selection: Binding(
+                    get: { model.config.backend },
+                    set: { b in Task { await model.updateConfig { $0.backend = b } } })) {
+                    ForEach(FUSEBackend.allCases, id: \.self) { b in
+                        Text(BackendText.name(b)).tag(b)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 260)
+                .disabled(!model.helperRunning)
+            }
+            Text(BackendText.detail(model.config.backend))
+                .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

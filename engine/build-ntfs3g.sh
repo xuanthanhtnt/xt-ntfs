@@ -99,14 +99,28 @@ make -j"$JOBS" >"$WORK/make.log" 2>&1 || { grep -iE -B2 -A3 'error' "$WORK/make.
 grep -E 'xt_rawio|unix_io' "$WORK/make.log" | grep -iE 'warning' || true
 
 log "Collecting binaries"
-STAGE="$WORK/stage"
-make install DESTDIR="$STAGE" >"$WORK/install.log" 2>&1 || { tail -40 "$WORK/install.log"; exit 1; }
+# Programs are taken straight from the build tree: `make install` is not
+# needed (libntfs-3g is static) and its install hooks assume a Linux
+# root layout (/lib, /sbin) that does not exist on macOS.
 mkdir -p "$OUT/bin"
-for p in ntfs-3g lowntfs-3g ntfs-3g.probe mkntfs ntfsfix ntfslabel ntfsinfo ntfsls ntfscat ntfscp ntfscluster ntfsresize; do
-  f="$(find "$STAGE" -type f -name "$p" -perm -u+x | head -1)"
+is_binary() {
+  # A real executable, not a libtool wrapper script.
+  [[ -f "$1" && -x "$1" ]] && ! head -c 2 "$1" | grep -q '#!'
+}
+REQUIRED=(ntfs-3g lowntfs-3g ntfs-3g.probe mkntfs ntfsfix ntfslabel)
+OPTIONAL=(ntfsinfo ntfsls ntfscat ntfscp ntfscluster ntfsresize)
+for p in "${REQUIRED[@]}" "${OPTIONAL[@]}"; do
+  f=""
+  for dir in "$SRC/src" "$SRC/ntfsprogs"; do
+    if is_binary "$dir/$p"; then f="$dir/$p"; break; fi
+    if is_binary "$dir/.libs/$p"; then f="$dir/.libs/$p"; break; fi
+  done
   if [[ -n "$f" ]]; then
     cp "$f" "$OUT/bin/$p"
     strip "$OUT/bin/$p" 2>/dev/null || true
+  elif [[ " ${REQUIRED[*]} " == *" $p "* ]]; then
+    echo "required program $p was not built" >&2
+    exit 1
   fi
 done
 echo "$VERSION" > "$OUT/bin/NTFS3G_VERSION"

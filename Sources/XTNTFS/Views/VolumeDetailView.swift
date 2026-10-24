@@ -176,9 +176,11 @@ struct VolumeDetailView: View {
     private var fileSystemText: String {
         if volume.isNTFS {
             if volume.mountedByXT {
-                let p = model.status?.mounts.first { $0.bsdName == volume.bsdName }?.profile
-                let profile = p.map { ProfileText.name($0) } ?? ""
-                return "Microsoft NTFS · XT NTFS" + (profile.isEmpty ? "" : " (\(profile))")
+                let m = model.status?.mounts.first(where: { $0.bsdName == volume.bsdName })
+                var details: [String] = []
+                if let p = m?.profile { details.append(ProfileText.name(p)) }
+                if m?.backend == .fskit { details.append("FSKit") }
+                return "Microsoft NTFS · XT NTFS" + (details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")
             }
             return "Microsoft NTFS"
         }
@@ -271,6 +273,27 @@ enum ProfileText {
             return NSLocalizedString("Raw device I/O, 64 MB write-back cache, 1 MB transfers. Recommended.", comment: "")
         case .turbo:
             return NSLocalizedString("Raw device I/O, 256 MB cache, 8 MB transfers. Fastest for large files; eject before unplugging.", comment: "")
+        }
+    }
+}
+
+enum BackendText {
+    static func name(_ b: FUSEBackend) -> String {
+        switch b {
+        case .automatic: return NSLocalizedString("Automatic", comment: "")
+        case .kernel: return NSLocalizedString("Kernel extension (fastest)", comment: "")
+        case .fskit: return NSLocalizedString("FSKit (no kernel extension)", comment: "")
+        }
+    }
+
+    static func detail(_ b: FUSEBackend) -> String {
+        switch b {
+        case .automatic:
+            return NSLocalizedString("Uses the macFUSE kernel extension when it can be loaded; otherwise, on macOS 26 and later, mounts through FSKit.", comment: "")
+        case .kernel:
+            return NSLocalizedString("Fastest. On Macs with Apple silicon, kernel extensions must be allowed in Startup Security Utility.", comment: "")
+        case .fskit:
+            return NSLocalizedString("No kernel extension and no change to startup security (macOS 15.4+ with macFUSE 5). Slower than the kernel extension. Turn on macFUSE in System Settings › General › Login Items & Extensions › File System Extensions.", comment: "")
         }
     }
 }

@@ -129,6 +129,43 @@ enum System {
         return (d["CFBundleShortVersionString"] as? String) ?? (d["CFBundleVersion"] as? String)
     }
 
+    /// Major version of the installed macFUSE (0 if unknown).
+    static var macFUSEMajorVersion: Int {
+        guard let v = macFUSEVersion, let major = Int(v.split(separator: ".").first ?? "") else { return 0 }
+        return major
+    }
+
+    /// macFUSE 5+ can mount through FSKit on macOS 15.4 and later.
+    static var fskitSupported: Bool {
+        macFUSEMajorVersion >= 5 && ProcessInfo.processInfo.isOperatingSystemAtLeast(
+            OperatingSystemVersion(majorVersion: 15, minorVersion: 4, patchVersion: 0))
+    }
+
+    /// Automatic mode falls back to FSKit only where it is known to work
+    /// well (macOS 26 and later).
+    static var fskitPreferredForAutomatic: Bool {
+        fskitSupported && ProcessInfo.processInfo.isOperatingSystemAtLeast(
+            OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0))
+    }
+
+    /// Gives the logged-in user access to the raw device of @bsd (needed by
+    /// an unprivileged ntfs-3g serving an FSKit mount).
+    static func lendDevice(_ bsd: String, uid: uid_t, gid: gid_t) {
+        guard NTFSNames.isValidBSDName(bsd) else { return }
+        let path = "/dev/r" + bsd
+        chown(path, uid, gid)
+        chmod(path, 0o600)
+    }
+
+    /// Restores the default ownership of the raw device (root:operator 0640).
+    static func releaseDevice(_ bsd: String) {
+        guard NTFSNames.isValidBSDName(bsd) else { return }
+        let path = "/dev/r" + bsd
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        chown(path, 0, 5)
+        chmod(path, 0o640)
+    }
+
     static var engineVersion: String {
         let path = XTPaths.engineDir + "/NTFS3G_VERSION"
         let v = (try? String(contentsOfFile: path, encoding: .utf8))?

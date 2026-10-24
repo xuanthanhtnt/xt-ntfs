@@ -19,7 +19,7 @@ jobs:
     name: Engine tests (Linux, FUSE)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build tools
         run: |
           sudo apt-get update -q
@@ -58,17 +58,31 @@ jobs:
     name: Engine (macOS universal)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - name: Cached engine
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/engine/bin
+          key: engine-macos-${{ hashFiles('engine/**') }}
       - name: Install build tools
+        if: steps.cache.outputs.cache-hit != 'true'
         run: brew install autoconf automake libtool pkgconf libgcrypt
       - name: Fetch macFUSE SDK
+        if: steps.cache.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: scripts/ci-run.sh engine/fetch-macfuse-sdk.sh "$RUNNER_TEMP/macfuse"
       - name: Build engine
+        if: steps.cache.outputs.cache-hit != 'true'
         env:
           MACFUSE_PREFIX: ${{ runner.temp }}/macfuse
         run: scripts/ci-run.sh engine/build-ntfs3g.sh "$RUNNER_TEMP/engine"
+      - name: Check engine
+        run: |
+          ls -l "$RUNNER_TEMP/engine/bin"
+          lipo -info "$RUNNER_TEMP/engine/bin/ntfs-3g"
+          otool -L "$RUNNER_TEMP/engine/bin/ntfs-3g"
       - uses: actions/upload-artifact@v4
         with:
           name: engine-macos
@@ -82,7 +96,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
@@ -123,13 +137,24 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python3 -m pip install --quiet --break-system-packages cryptography || python3 -m pip install --quiet cryptography
           DMG="${{ steps.dmg.outputs.dmg }}"
           NAME="$(basename "$DMG")"
-          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${NAME}"
-          python3 scripts/make-appcast.py "$DMG" "${{ steps.dmg.outputs.version }}" "${{ steps.dmg.outputs.build }}" "$URL" build/appcast.xml
           (cd build && shasum -a 256 "$NAME" > "$NAME.sha256")
+          if [ -n "$SPARKLE_ED_PRIVATE_KEY" ]; then
+            python3 -m pip install --quiet --break-system-packages cryptography || python3 -m pip install --quiet cryptography
+            URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${NAME}"
+            python3 scripts/make-appcast.py "$DMG" "${{ steps.dmg.outputs.version }}" "${{ steps.dmg.outputs.build }}" "$URL" build/appcast.xml
+          else
+            # Without the signing key the update cannot be offered in-app.
+            # Keep the feed pointing at the previous signed release.
+            echo "::warning title=Sparkle::SPARKLE_ED_PRIVATE_KEY secret is not set; this release is not offered as an in-app update."
+            prev="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft == false and .tag_name != env.GITHUB_REF_NAME)][0].tag_name' 2>/dev/null || true)"
+            if [ -n "$prev" ] && [ "$prev" != "null" ]; then
+              gh release download "$prev" --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir build || true
+            fi
+          fi
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -138,29 +163,37 @@ jobs:
           DMG="${{ steps.dmg.outputs.dmg }}"
           NOTES="build/release-notes.md"
           python3 scripts/release-notes.py "${{ steps.dmg.outputs.version }}" > "$NOTES"
+          # Fixed-name copy so https://github.com/<repo>/releases/latest/download/XT-NTFS.dmg always works.
+          cp "$DMG" build/XT-NTFS.dmg
+          ASSETS=("$DMG" "$DMG.sha256" build/XT-NTFS.dmg)
+          [ -f build/appcast.xml ] && ASSETS+=(build/appcast.xml)
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" build/appcast.xml --clobber
+            gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" build/appcast.xml \
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
               --title "XT NTFS ${{ steps.dmg.outputs.version }}" --notes-file "$NOTES"
           fi
 
   pages:
     name: Website (GitHub Pages)
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     permissions:
-      pages: write
-      id-token: write
-      contents: read
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v5
+      - name: Publish docs/ to the gh-pages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SITE="$RUNNER_TEMP/site"
+          cp -R docs "$SITE"
+          # Mirror the current update feed on the website as well.
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir "$SITE" 2>/dev/null || true
+          cd "$SITE"
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Website from ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

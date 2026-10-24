@@ -51,8 +51,8 @@ final class Helper: DiskWatcherDelegate {
         guard !disk.isWhole || disk.isLeaf else { return }
         // Only volumes that another driver mounted before we were running,
         // or that macOS left unmounted.
-        let mounts = MountTable.entries(forBSD: disk.bsdName)
-        if mounts.contains(where: { $0.isXT }) { return }
+        let mounts = mounter.entries(of: disk.bsdName)
+        if mounter.xtMount(of: disk.bsdName) != nil { return }
         guard mounter.isNTFS(disk) else { return }
         if config.prefs(forKey: disk.prefsKey).noAutoMount { return }
         if !mounts.isEmpty || disk.volumePath == nil {
@@ -67,6 +67,7 @@ final class Helper: DiskWatcherDelegate {
             if MountTable.entry(at: m.mountPoint) != nil {
                 Shell.run("/sbin/umount", ["-f", m.mountPoint], timeout: 30)
             }
+            if m.backend == .fskit { System.releaseDevice(bsdName) }
             if FileManager.default.fileExists(atPath: m.mountPoint), !System.isMountPoint(m.mountPoint) {
                 try? FileManager.default.removeItem(atPath: m.mountPoint)
             }
@@ -171,6 +172,7 @@ final class Helper: DiskWatcherDelegate {
                 c.hibernatedPolicy = new.hibernatedPolicy
                 c.profile = new.profile
                 c.windowsNames = new.windowsNames
+                c.backend = new.backend
             }
             if new.driverEnabled && !old.driverEnabled {
                 // Pick up NTFS volumes that are mounted read-only or not at all.
@@ -232,7 +234,7 @@ final class Helper: DiskWatcherDelegate {
                         c.volumes[key] = p
                     }
                 }
-                if let mp = MountTable.entries(forBSD: bsd).first?.on {
+                if let mp = self.mounter.entries(of: bsd).first?.on {
                     self.mounter.applySpotlight(mountPoint: mp, enabled: enabled)
                 }
                 return nil

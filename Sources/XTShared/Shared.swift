@@ -55,6 +55,19 @@ public enum PerformanceProfile: String, Codable, CaseIterable, Sendable {
     case turbo
 }
 
+/// Which macFUSE backend serves XT mounts.
+public enum FUSEBackend: String, Codable, CaseIterable, Sendable {
+    /// Kernel extension when it can be loaded, otherwise FSKit (macOS 15.4+
+    /// with macFUSE 5 or later).
+    case automatic
+    /// macFUSE kernel extension (VFS): fastest; on Apple silicon it needs
+    /// kernel extensions allowed in Startup Security Utility.
+    case kernel
+    /// macFUSE FSKit backend: runs in user space with no kernel extension,
+    /// slower than the kernel backend.
+    case fskit
+}
+
 /// Per-volume preferences, keyed by volume UUID (or BSD name + label when
 /// the volume has no UUID).
 public struct VolumePrefs: Codable, Equatable, Sendable {
@@ -75,6 +88,7 @@ public struct EngineConfig: Codable, Equatable, Sendable {
     public var hibernatedPolicy: HibernatedPolicy
     public var profile: PerformanceProfile
     public var windowsNames: Bool
+    public var backend: FUSEBackend
     public var volumes: [String: VolumePrefs]
 
     public init(driverEnabled: Bool = true,
@@ -82,12 +96,14 @@ public struct EngineConfig: Codable, Equatable, Sendable {
                 hibernatedPolicy: HibernatedPolicy = .ask,
                 profile: PerformanceProfile = .balanced,
                 windowsNames: Bool = true,
+                backend: FUSEBackend = .automatic,
                 volumes: [String: VolumePrefs] = [:]) {
         self.driverEnabled = driverEnabled
         self.dirtyPolicy = dirtyPolicy
         self.hibernatedPolicy = hibernatedPolicy
         self.profile = profile
         self.windowsNames = windowsNames
+        self.backend = backend
         self.volumes = volumes
     }
 
@@ -99,6 +115,7 @@ public struct EngineConfig: Codable, Equatable, Sendable {
         hibernatedPolicy = (try? c.decodeIfPresent(HibernatedPolicy.self, forKey: .hibernatedPolicy)) ?? .ask
         profile = (try? c.decodeIfPresent(PerformanceProfile.self, forKey: .profile)) ?? .balanced
         windowsNames = try c.decodeIfPresent(Bool.self, forKey: .windowsNames) ?? true
+        backend = (try? c.decodeIfPresent(FUSEBackend.self, forKey: .backend)) ?? .automatic
         volumes = try c.decodeIfPresent([String: VolumePrefs].self, forKey: .volumes) ?? [:]
     }
 
@@ -117,16 +134,20 @@ public struct ManagedMount: Codable, Equatable, Sendable, Identifiable {
     public var volumeName: String
     public var readOnly: Bool
     public var profile: PerformanceProfile
+    /// Backend actually used (nil for mounts found after a helper restart).
+    public var backend: FUSEBackend?
     public var mountedAt: Date
 
     public init(bsdName: String, devicePath: String, mountPoint: String, volumeName: String,
-                readOnly: Bool, profile: PerformanceProfile, mountedAt: Date = Date()) {
+                readOnly: Bool, profile: PerformanceProfile, backend: FUSEBackend? = nil,
+                mountedAt: Date = Date()) {
         self.bsdName = bsdName
         self.devicePath = devicePath
         self.mountPoint = mountPoint
         self.volumeName = volumeName
         self.readOnly = readOnly
         self.profile = profile
+        self.backend = backend
         self.mountedAt = mountedAt
     }
 }

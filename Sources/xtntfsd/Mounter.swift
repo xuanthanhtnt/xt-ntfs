@@ -29,8 +29,47 @@ final class Mounter {
         return System.bootSectorOEM(bsd: d.bsdName) == "NTFS    "
     }
 
+    /// Mount table entries of @bsd, including an XT mount made through the
+    /// FSKit backend, whose "mounted from" field may not name the device.
+    func entries(of bsd: String) -> [MountEntry] {
+        var list = MountTable.entries(forBSD: bsd)
+        if let m = state.mount(bsd: bsd), let e = MountTable.entry(at: m.mountPoint),
+           !list.contains(where: { $0.on == e.on }) {
+            list.append(e)
+        }
+        return list
+    }
+
+    /// True if @e is a mount made by the XT engine for @bsd.
+    func isOurs(_ e: MountEntry, bsd: String) -> Bool {
+        e.isXT || state.mount(bsd: bsd)?.mountPoint == e.on
+    }
+
     func xtMount(of bsd: String) -> MountEntry? {
-        MountTable.entries(forBSD: bsd).first { $0.isXT }
+        entries(of: bsd).first { isOurs($0, bsd: bsd) }
+    }
+
+    /// Set after the kernel backend failed to load in automatic mode, so
+    /// later mounts go to FSKit first.
+    private var kernelUnavailable = false
+
+    private func backendsToTry(_ choice: FUSEBackend) -> [FUSEBackend] {
+        switch choice {
+        case .kernel: return [.kernel]
+        case .fskit: return [.fskit]
+        case .automatic:
+            guard System.fskitPreferredForAutomatic else { return [.kernel] }
+            return kernelUnavailable ? [.fskit, .kernel] : [.kernel, .fskit]
+        }
+    }
+
+    /// ntfs-3g reports FUSE problems with status 21 (NTFS_VOLUME_FUSE_ERROR).
+    private func isFUSEFailure(_ r: CommandResult) -> Bool {
+        if r.status == 21 { return true }
+        let lower = r.combined.lowercased()
+        return lower.contains("fuse") && (lower.contains("not available") || lower.contains("load")
+                                           || lower.contains("device not configured")
+                                           || lower.contains("extension"))
     }
 
     // MARK: Mount
@@ -51,7 +90,7 @@ final class Mounter {
 
         // Take the device away from any other driver (macOS read-only
         // driver, Paragon, a previous macFUSE mount...).
-        for e in MountTable.entries(forBSD: bsd) {
+        for e in entries(of: bsd) {
             Log.info("Unmounting \(e.on) (\(e.fsType)) before XT mount")
             if let err = unmountPath(e.on, force: false) {
                 throw EngineError("The volume is in use and could not be unmounted: \(err)")
@@ -119,29 +158,58 @@ final class Mounter {
         }
 
         let profile = config.profile
-        let device = profile == .compatible ? "/dev/" + bsd : "/dev/r" + bsd
-        let mountPoint = try makeMountPoint(name: NTFSNames.mountName(for: label, bsdName: bsd))
-        var opts = options(profile: profile, label: NTFSNames.mountName(for: label, bsdName: bsd),
-                           readOnly: readOnly, windowsNames: config.windowsNames)
-        opts.append(contentsOf: extra)
+        let volname = NTFSNames.mountName(for: label, bsdName: bsd)
+        let mountPoint = try makeMountPoint(name: volname)
 
-        Log.info("Mounting \(device) at \(mountPoint) [\(profile.rawValue)\(readOnly ? ", read-only" : "")]")
-        let started = Date()
-        let r = Shell.run(System.tool("ntfs-3g"), [device, mountPoint, "-o", opts.joined(separator: ",")],
-                          env: environment(for: profile), timeout: 300)
-        if !r.ok || !waitForMount(mountPoint) {
+        var mounted = false
+        var device = "/dev/r" + bsd
+        var usedBackend = FUSEBackend.kernel
+        var last: CommandResult?
+        let backends = backendsToTry(config.backend)
+        for (i, backend) in backends.enumerated() {
+            var opts = options(profile: profile, backend: backend, label: volname,
+                               readOnly: readOnly, windowsNames: config.windowsNames)
+            opts.append(contentsOf: extra)
+            // Unprivileged ntfs-3g (FSKit) may only use the character device.
+            device = (profile == .compatible && backend != .fskit) ? "/dev/" + bsd : "/dev/r" + bsd
+            var env = environment(for: profile)
+            if backend == .fskit && profile == .compatible { env = ["XTNTFS_CACHE_MB": "0"] }
+            Log.info("Mounting \(device) at \(mountPoint) [\(profile.rawValue), \(backend.rawValue)\(readOnly ? ", read-only" : "")]")
+            let started = Date()
+            let r = runEngine(bsd: bsd, device: device, mountPoint: mountPoint, options: opts,
+                              env: env, backend: backend)
+            if r.ok && waitForMount(mountPoint, seconds: backend == .fskit ? 20 : 5) {
+                Log.info("Mounted \(bsd) with \(backend.rawValue) in \(String(format: "%.2f", Date().timeIntervalSince(started))) s")
+                mounted = true
+                usedBackend = backend
+                break
+            }
+            last = r
+            Log.error("Mount of \(bsd) with \(backend.rawValue) failed: \(r.status) \(r.combined)")
+            if MountTable.entry(at: mountPoint) != nil { unmountPath(mountPoint, force: true) }
+            if backend == .fskit { System.releaseDevice(bsd) }
+            guard i + 1 < backends.count, isFUSEFailure(r) else { break }
+            if backend == .kernel {
+                kernelUnavailable = true
+                Log.warn("The macFUSE kernel extension is not available; trying the FSKit backend")
+            }
+        }
+        if !mounted {
             try? FileManager.default.removeItem(atPath: mountPoint)
-            let msg = explain(r)
+            let msg = explain(last ?? CommandResult(status: -1, stdout: "", stderr: "", timedOut: true),
+                              backend: backends.last ?? .kernel)
             state.addEvent(.mountFailed, bsd: bsd, volume: label, msg)
-            Log.error("Mount of \(bsd) failed: \(r.status) \(r.combined)")
             throw EngineError(msg)
         }
-        Log.info("Mounted \(bsd) in \(String(format: "%.2f", Date().timeIntervalSince(started))) s")
 
         // Safety net: if another driver mounted the same device meanwhile
         // (e.g. a late automount), take it down so only XT owns the device.
+        let ownMount = ManagedMount(bsdName: bsd, devicePath: device, mountPoint: mountPoint,
+                                    volumeName: label ?? bsd, readOnly: readOnly, profile: profile,
+                                    backend: usedBackend)
+        state.setMount(ownMount)
         usleep(800_000)
-        for e in MountTable.entries(forBSD: bsd) where !e.isXT {
+        for e in MountTable.entries(forBSD: bsd) where !isOurs(e, bsd: bsd) {
             Log.warn("Removing competing mount \(e.on) (\(e.fsType)) of \(bsd)")
             unmountPath(e.on, force: true)
         }
@@ -149,12 +217,9 @@ final class Mounter {
         if !readOnly { prepareVolume(at: mountPoint) }
         applySpotlight(mountPoint: mountPoint, enabled: prefs.spotlight)
 
-        let m = ManagedMount(bsdName: bsd, devicePath: device, mountPoint: mountPoint,
-                             volumeName: label ?? bsd, readOnly: readOnly, profile: profile)
-        state.setMount(m)
         state.addEvent(.mounted, bsd: bsd, volume: label,
                        readOnly ? "Mounted read-only." : "Mounted read-write.")
-        return m
+        return ownMount
     }
 
     private func volumeLabel(_ d: DiskDescription) -> String? {
@@ -164,37 +229,101 @@ final class Mounter {
         return r.ok && !s.isEmpty ? s : nil
     }
 
-    private func options(profile: PerformanceProfile, label: String, readOnly: Bool,
-                         windowsNames: Bool) -> [String] {
+    private func options(profile: PerformanceProfile, backend: FUSEBackend, label: String,
+                         readOnly: Bool, windowsNames: Bool) -> [String] {
         let owner = System.consoleUser()
         let escaped = label.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: ",", with: "\\,")
         var o = [
             "volname=\(escaped)",
             "local",
-            "allow_other",
-            "defer_permissions",
             "uid=\(owner?.uid ?? 0)",
             "gid=\(owner?.gid ?? 0)",
             "dmask=022",
             "fmask=133",
             "user_xattr",
-            "daemon_timeout=120",
         ]
-        if FileManager.default.fileExists(atPath: XTPaths.volumeIconPath) {
-            o.append("volicon=\(XTPaths.volumeIconPath.replacingOccurrences(of: ",", with: "\\,"))")
+        let kernel = backend != .fskit
+        if kernel {
+            // Options implemented by the macFUSE kernel extension only.
+            o += ["allow_other", "defer_permissions", "daemon_timeout=120"]
+            if FileManager.default.fileExists(atPath: XTPaths.volumeIconPath) {
+                o.append("volicon=\(XTPaths.volumeIconPath.replacingOccurrences(of: ",", with: "\\,"))")
+            }
+        } else {
+            o.append("backend=fskit")
         }
         switch profile {
         case .compatible:
             break
         case .balanced:
-            o += ["noatime", "big_writes", "noappledouble", "negative_vncache", "iosize=1048576"]
+            o += ["noatime", "big_writes"]
+            if kernel { o += ["noappledouble", "negative_vncache", "iosize=1048576"] }
         case .turbo:
-            o += ["noatime", "big_writes", "noappledouble", "negative_vncache", "iosize=8388608"]
+            o += ["noatime", "big_writes"]
+            if kernel { o += ["noappledouble", "negative_vncache", "iosize=8388608"] }
         }
         if windowsNames { o.append("windows_names") }
         if readOnly { o.append("ro") }
         return o
+    }
+
+    /// FSKit engines run in the foreground; keep their Process objects.
+    private var foregroundEngines: [String: Process] = [:]
+
+    /// Starts ntfs-3g. With the kernel backend it runs as root and detaches
+    /// once the volume is mounted. FSKit mounts must be made by the
+    /// logged-in user and cannot survive a fork, so the raw device is handed
+    /// to that user for the lifetime of the mount and ntfs-3g runs in the
+    /// foreground in the user's session.
+    private func runEngine(bsd: String, device: String, mountPoint: String, options: [String],
+                           env: [String: String], backend: FUSEBackend) -> CommandResult {
+        guard backend == .fskit else {
+            return Shell.run(System.tool("ntfs-3g"),
+                             [device, mountPoint, "-o", options.joined(separator: ",")],
+                             env: env, timeout: 300)
+        }
+        guard let user = System.consoleUser() else {
+            return CommandResult(status: 1, stdout: "",
+                                 stderr: "The FSKit backend needs a logged-in user.", timedOut: false)
+        }
+        System.lendDevice(bsd, uid: user.uid, gid: user.gid)
+        chown(mountPoint, user.uid, user.gid)
+
+        let logPath = "/Library/Logs/XTNTFS-\(bsd).log"
+        FileManager.default.createFile(atPath: logPath, contents: nil,
+                                       attributes: [.posixPermissions: 0o644])
+        var command = ["asuser", String(user.uid), "/usr/bin/sudo", "-u", "#\(user.uid)", "--", "/usr/bin/env"]
+        command += env.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        command += [System.tool("ntfs-3g"), device, mountPoint, "-o",
+                    (options + ["no_detach"]).joined(separator: ",")]
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        p.arguments = command
+        p.standardInput = FileHandle.nullDevice
+        if let log = FileHandle(forWritingAtPath: logPath) {
+            p.standardOutput = log
+            p.standardError = log
+        }
+        do {
+            try p.run()
+        } catch {
+            return CommandResult(status: 127, stdout: "", stderr: error.localizedDescription, timedOut: false)
+        }
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline {
+            if MountTable.entry(at: mountPoint) != nil {
+                foregroundEngines[bsd] = p
+                return CommandResult(status: 0, stdout: "", stderr: "", timedOut: false)
+            }
+            if !p.isRunning { break }
+            usleep(100_000)
+        }
+        let timedOut = p.isRunning
+        if timedOut { p.terminate() }
+        let log = (try? String(contentsOfFile: logPath, encoding: .utf8)) ?? ""
+        return CommandResult(status: timedOut ? -1 : p.terminationStatus, stdout: "",
+                             stderr: log, timedOut: timedOut)
     }
 
     private func environment(for profile: PerformanceProfile) -> [String: String] {
@@ -233,20 +362,22 @@ final class Mounter {
         return candidate
     }
 
-    private func waitForMount(_ path: String) -> Bool {
-        for _ in 0..<50 {
+    private func waitForMount(_ path: String, seconds: Int = 5) -> Bool {
+        for _ in 0..<(seconds * 10) {
             if MountTable.entry(at: path) != nil { return true }
             usleep(100_000)
         }
         return false
     }
 
-    private func explain(_ r: CommandResult) -> String {
+    private func explain(_ r: CommandResult, backend: FUSEBackend) -> String {
         let text = r.combined
         let lower = text.lowercased()
-        if lower.contains("fuse") && (lower.contains("not available") || lower.contains("load")
-                                       || lower.contains("device not configured")) {
-            return "macFUSE could not be loaded. Allow the macFUSE system extension in System Settings > Privacy & Security, then try again."
+        if isFUSEFailure(r) {
+            if backend == .fskit {
+                return "macFUSE could not mount the volume with FSKit. Turn on macFUSE in System Settings > General > Login Items & Extensions > File System Extensions, then try again."
+            }
+            return "macFUSE could not be loaded. Allow the macFUSE system extension in System Settings > Privacy & Security (Apple silicon: allow kernel extensions in Startup Security Utility first), or choose the FSKit backend in XT NTFS settings."
         }
         if lower.contains("hibernat") || lower.contains("fast restart") {
             return "Windows is hibernated or uses Fast Startup. Shut Windows down completely or choose a hibernation option in XT NTFS settings."
@@ -275,7 +406,7 @@ final class Mounter {
     // MARK: Unmount
 
     func unmount(bsd: String, force: Bool = false) throws {
-        let mounts = MountTable.entries(forBSD: bsd)
+        let mounts = entries(of: bsd)
         guard !mounts.isEmpty else {
             state.removeMount(bsd: bsd)
             return
@@ -284,13 +415,17 @@ final class Mounter {
             if let err = unmountPath(e.on, force: force) {
                 throw EngineError("Could not unmount \(e.on). Close any files or apps using it and try again.\n\(err)")
             }
-            if e.isXT {
+            if isOurs(e, bsd: bsd) {
                 // Wait for ntfs-3g to write back its cache and close the device.
                 if !System.waitForEngineExit(bsd: bsd, timeout: 120) {
                     Log.warn("ntfs-3g for \(bsd) still running after unmount")
                 }
                 if FileManager.default.fileExists(atPath: e.on), !System.isMountPoint(e.on) {
                     try? FileManager.default.removeItem(atPath: e.on)
+                }
+                if state.mount(bsd: bsd)?.backend == .fskit || foregroundEngines[bsd] != nil {
+                    foregroundEngines[bsd] = nil
+                    System.releaseDevice(bsd)
                 }
             }
         }
@@ -313,18 +448,20 @@ final class Mounter {
         return r.combined.isEmpty ? u.combined : r.combined
     }
 
+    /// BSD names of all volumes currently mounted by the XT engine.
+    func ourBSDNames() -> [String] {
+        let fromTable = MountTable.entries().filter { $0.isXT }.compactMap { $0.bsdName }
+        return Array(Set(fromTable + state.allMounts.map { $0.bsdName })).sorted()
+    }
+
     func unmountAll() {
-        for e in MountTable.entries() where e.isXT {
-            if let bsd = e.bsdName { try? unmount(bsd: bsd, force: true) }
-        }
+        for bsd in ourBSDNames() { try? unmount(bsd: bsd, force: true) }
     }
 
     func eject(bsd: String) throws {
         let whole = NTFSNames.wholeDisk(of: bsd)
-        for e in MountTable.entries() where e.isXT {
-            if let b = e.bsdName, NTFSNames.wholeDisk(of: b) == whole {
-                try unmount(bsd: b)
-            }
+        for b in ourBSDNames() where NTFSNames.wholeDisk(of: b) == whole {
+            try unmount(bsd: b)
         }
         if let err = watcher.unmount(bsd: whole, whole: true) {
             throw EngineError(err)
@@ -341,7 +478,7 @@ final class Mounter {
         if isNTFS(desc) {
             let wasXT = xtMount(of: bsd)
             let wasReadOnly = wasXT?.readOnly
-            if !MountTable.entries(forBSD: bsd).isEmpty { try unmount(bsd: bsd) }
+            if !entries(of: bsd).isEmpty { try unmount(bsd: bsd) }
             let args = repair ? ["/dev/" + bsd] : ["--no-action", "/dev/" + bsd]
             let r = Shell.run(System.tool("ntfsfix"), args, timeout: 3600)
             var report = r.combined
@@ -378,7 +515,7 @@ final class Mounter {
         let cleanLabel = String(label.trimmingCharacters(in: .whitespacesAndNewlines).prefix(32))
         let finalLabel = cleanLabel.isEmpty ? "Untitled" : cleanLabel
 
-        if !MountTable.entries(forBSD: bsd).isEmpty { try unmount(bsd: bsd, force: true) }
+        if !entries(of: bsd).isEmpty { try unmount(bsd: bsd, force: true) }
 
         if let personality = format.diskutilName {
             let r = Shell.run("/usr/sbin/diskutil", ["eraseVolume", personality, finalLabel, bsd], timeout: 3600)
@@ -412,7 +549,7 @@ final class Mounter {
         guard let desc = watcher.describe(bsd: bsd) else { throw EngineError("Disk \(bsd) was not found.") }
         if isNTFS(desc) {
             let was = xtMount(of: bsd)
-            if !MountTable.entries(forBSD: bsd).isEmpty { try unmount(bsd: bsd) }
+            if !entries(of: bsd).isEmpty { try unmount(bsd: bsd) }
             let r = Shell.run(System.tool("ntfslabel"), ["/dev/" + bsd, newLabel], timeout: 120)
             if !r.ok { throw EngineError(r.combined) }
             if was != nil || state.config.driverEnabled {
