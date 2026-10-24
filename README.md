@@ -85,12 +85,12 @@ scripts/build-app.sh build/engine/bin build
 scripts/make-dmg.sh "build/XT NTFS.app" build/XT-NTFS.dmg
 ```
 
-GitHub Actions (`.github/workflows/build.yml`) runs the engine tests, builds the universal engine and app on every push, publishes a release with the DMG and a signed `appcast.xml` for `v*` tags, and publishes the website from `docs/` to the `gh-pages` branch.
+GitHub Actions (`.github/workflows/build.yml`) runs the engine tests, builds the universal engine and app on every push, publishes a release with the DMG and a signed `appcast.xml` whenever `VERSION` is new, and publishes the website from `docs/` to the `gh-pages` branch.
 
 ### Releasing
 
 1. Add the Sparkle EdDSA private key (base64) as the repository secret `SPARKLE_ED_PRIVATE_KEY` (Settings → Secrets and variables → Actions). Its public half is `Resources/sparkle_public_key.txt`.
-2. Bump `VERSION`, add a section to `CHANGELOG.md`, commit, then `git tag vX.Y.Z && git push --tags`.
+2. Bump `VERSION`, add a section to `CHANGELOG.md` and push to `main`. When CI finds no release for the new version it builds the DMG, creates the `vX.Y.Z` tag and release, and attaches the signed `appcast.xml`. (Pushing a `vX.Y.Z` tag works too.)
 
 Without the secret, the release is still published but is not offered as an in-app update.
 

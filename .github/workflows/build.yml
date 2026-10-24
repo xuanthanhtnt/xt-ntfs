@@ -123,7 +123,28 @@ jobs:
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Release decision
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          TAG="v$VERSION"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            if [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+              echo "Tag $GITHUB_REF_NAME does not match VERSION $VERSION"; exit 1
+            fi
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ] \
+               && ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # A new VERSION on main publishes a release (the tag is created by the release).
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Smoke and integration test
+        id: smoke
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
         env:
@@ -157,37 +178,34 @@ jobs:
           name: XT-NTFS-dmg
           path: ${{ steps.dmg.outputs.dmg }}
           if-no-files-found: error
-      - name: Check tag matches VERSION
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          test "${GITHUB_REF_NAME#v}" = "${{ steps.dmg.outputs.version }}" || {
-            echo "Tag $GITHUB_REF_NAME does not match VERSION ${{ steps.dmg.outputs.version }}"; exit 1; }
       - name: Sign update and create appcast
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.rel.outputs.release == 'true' && steps.smoke.outcome != 'failure'
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.rel.outputs.tag }}
         run: |
           DMG="${{ steps.dmg.outputs.dmg }}"
           NAME="$(basename "$DMG")"
           (cd build && shasum -a 256 "$NAME" > "$NAME.sha256")
           if [ -n "$SPARKLE_ED_PRIVATE_KEY" ]; then
             python3 -m pip install --quiet --break-system-packages cryptography || python3 -m pip install --quiet cryptography
-            URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${NAME}"
+            URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${NAME}"
             python3 scripts/make-appcast.py "$DMG" "${{ steps.dmg.outputs.version }}" "${{ steps.dmg.outputs.build }}" "$URL" build/appcast.xml
           else
             # Without the signing key the update cannot be offered in-app.
             # Keep the feed pointing at the previous signed release.
             echo "::warning title=Sparkle::SPARKLE_ED_PRIVATE_KEY secret is not set; this release is not offered as an in-app update."
-            prev="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft == false and .tag_name != env.GITHUB_REF_NAME)][0].tag_name' 2>/dev/null || true)"
+            prev="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --jq '[.[] | select(.draft == false and .tag_name != env.TAG)][0].tag_name' 2>/dev/null || true)"
             if [ -n "$prev" ] && [ "$prev" != "null" ]; then
               gh release download "$prev" --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --dir build || true
             fi
           fi
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.rel.outputs.release == 'true' && steps.smoke.outcome != 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.rel.outputs.tag }}
         run: |
           DMG="${{ steps.dmg.outputs.dmg }}"
           NOTES="build/release-notes.md"
@@ -196,10 +214,10 @@ jobs:
           cp "$DMG" build/XT-NTFS.dmg
           ASSETS=("$DMG" "$DMG.sha256" build/XT-NTFS.dmg)
           [ -f build/appcast.xml ] && ASSETS+=(build/appcast.xml)
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+            gh release create "$TAG" "${ASSETS[@]}" --target "$GITHUB_SHA" \
               --title "XT NTFS ${{ steps.dmg.outputs.version }}" --notes-file "$NOTES"
           fi
 
