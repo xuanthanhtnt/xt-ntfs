@@ -1,6 +1,6 @@
 # Nhật ký thay đổi
 
-## [Chưa phát hành]
+## [1.0.4] - 2026-10-24
 
 - Sửa lỗi không tháo được ổ ngay sau khi mở app: app tự quét dung lượng theo loại file và giữ ổ trong lúc quét. Giờ việc quét được dừng trước khi tháo, đẩy ra, kiểm tra, xoá, đổi tên hay đo tốc độ, rồi tự chạy lại sau đó.
 
