@@ -296,15 +296,17 @@ final class AppModel: ObservableObject {
         guard v.isNTFS, let mp = v.mountPoint, usage[v.bsdName] == nil, usageTasks[v.bsdName] == nil else { return }
         usage[v.bsdName] = UsageBreakdown()
         let bsd = v.bsdName
-        usageTasks[bsd] = Task.detached(priority: .utility) { [weak self] in
+        usageTasks[bsd] = Task.detached(priority: .utility) { [model = self] in
             let result = UsageScanner.scan(mountPoint: mp) { partial in
-                Task { @MainActor in self?.usage[bsd] = partial }
+                Task { @MainActor in model.usage[bsd] = partial }
             }
-            await MainActor.run {
-                self?.usage[bsd] = result
-                self?.usageTasks[bsd] = nil
-            }
+            await model.finishUsage(bsd: bsd, result: result)
         }
+    }
+
+    private func finishUsage(bsd: String, result: UsageBreakdown) {
+        usage[bsd] = result
+        usageTasks[bsd] = nil
     }
 
     func addBenchmark(_ r: BenchmarkResult) {

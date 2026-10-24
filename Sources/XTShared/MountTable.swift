@@ -13,6 +13,17 @@ public struct MountEntry: Equatable, Sendable {
     public var totalBytes: Int64
     public var freeBytes: Int64
 
+    public init(from: String, on: String, fsType: String, readOnly: Bool, noBrowse: Bool,
+                totalBytes: Int64, freeBytes: Int64) {
+        self.from = from
+        self.on = on
+        self.fsType = fsType
+        self.readOnly = readOnly
+        self.noBrowse = noBrowse
+        self.totalBytes = totalBytes
+        self.freeBytes = freeBytes
+    }
+
     /// BSD name of the device ("disk4s1") for /dev/diskXsY or /dev/rdiskXsY.
     public var bsdName: String? {
         if from.hasPrefix("/dev/rdisk") { return String(from.dropFirst(6)) }

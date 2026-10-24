@@ -182,7 +182,7 @@
           <span lang="vi">Cắm ổ cứng, USB hay SSD định dạng trên Windows vào là dùng được ngay: chép, sửa, đổi tên, xoá file trong Finder. XT NTFS miễn phí và mã nguồn mở.</span>
           <span lang="en">Plug in a hard drive, USB stick or SSD formatted on Windows and use it right away: copy, edit, rename and delete files in Finder. XT NTFS is free and open source.</span>
         </p>
-        <a class="cta" id="download" href="https://github.com/xuanthanhtnt/xt-ntfs/releases/latest">
+        <a class="cta" id="download" href="https://github.com/xuanthanhtnt/xt-ntfs/releases/latest/download/XT-NTFS.dmg">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m6.5 10 5.5 5.5 5.5-5.5"/><path d="M5 20h14"/></svg>
           <span lang="vi">Tải XT NTFS cho macOS</span><span lang="en">Download XT NTFS for macOS</span>
         </a>
@@ -277,7 +277,7 @@
     <section id="install">
       <h2><span lang="vi">Cài đặt</span><span lang="en">Install</span></h2>
       <ol class="install">
-        <li><div><h3><span lang="vi">Cài macFUSE</span><span lang="en">Install macFUSE</span></h3><p><span lang="vi">Tải tại <a href="https://macfuse.github.io/">macfuse.github.io</a> và cho phép system extension trong Quyền riêng tư &amp; Bảo mật. Máy chip Apple cần bật kernel extension trong Startup Security Utility, giống yêu cầu của các driver NTFS thương mại.</span><span lang="en">Get it from <a href="https://macfuse.github.io/">macfuse.github.io</a> and allow its system extension in Privacy &amp; Security. Apple silicon Macs need kernel extensions enabled in Startup Security Utility, the same requirement as commercial NTFS drivers.</span></p></div></li>
+        <li><div><h3><span lang="vi">Cài macFUSE</span><span lang="en">Install macFUSE</span></h3><p><span lang="vi">Tải tại <a href="https://macfuse.github.io/">macfuse.github.io</a> và cho phép system extension trong Quyền riêng tư &amp; Bảo mật. Máy chip Apple cần bật kernel extension trong Startup Security Utility, giống yêu cầu của các driver NTFS thương mại. Từ macOS 26 có thể bỏ bước này: bật macFUSE trong Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập &amp; Tiện ích mở rộng › Tiện ích hệ thống tệp, XT NTFS sẽ tự dùng FSKit (chậm hơn kernel extension).</span><span lang="en">Get it from <a href="https://macfuse.github.io/">macfuse.github.io</a> and allow its system extension in Privacy &amp; Security. Apple silicon Macs need kernel extensions enabled in Startup Security Utility, the same requirement as commercial NTFS drivers. On macOS 26 and later you can skip that: turn on macFUSE under System Settings › General › Login Items &amp; Extensions › File System Extensions and XT NTFS uses FSKit instead (slower than the kernel extension).</span></p></div></li>
         <li><div><h3><span lang="vi">Kéo XT NTFS vào Applications</span><span lang="en">Drag XT NTFS to Applications</span></h3><p><span lang="vi">Mở file DMG vừa tải và kéo app vào thư mục Applications.</span><span lang="en">Open the downloaded DMG and drag the app into Applications.</span></p></div></li>
         <li><div><h3><span lang="vi">Mở app lần đầu</span><span lang="en">Open it the first time</span></h3><p><span lang="vi">App chưa được Apple notarize, nên lần đầu hãy nhấp chuột phải vào app và chọn Open, hoặc vào Quyền riêng tư &amp; Bảo mật và bấm “Vẫn mở”.</span><span lang="en">The app isn't notarized by Apple, so the first time right-click it and choose Open, or click “Open Anyway” in Privacy &amp; Security.</span></p></div></li>
         <li><div><h3><span lang="vi">Cài engine</span><span lang="en">Install the engine</span></h3><p><span lang="vi">Bấm XT NTFS ở cuối thanh bên rồi chọn “Cài engine…” và nhập mật khẩu quản trị. Từ giờ cắm ổ NTFS là ghi được.</span><span lang="en">Click XT NTFS at the bottom of the sidebar, choose “Install Engine…” and enter an administrator password. From now on, NTFS disks are writable when you plug them in.</span></p></div></li>
@@ -324,7 +324,7 @@
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (rel) {
       if (!rel || !rel.assets) return;
-      var dmg = rel.assets.filter(function (a) { return /\.dmg$/.test(a.name); })[0];
+      var dmg = rel.assets.filter(function (a) { return a.name === "XT-NTFS.dmg"; })[0] || rel.assets.filter(function (a) { return /\.dmg$/.test(a.name); })[0];
       if (dmg) document.getElementById("download").href = dmg.browser_download_url;
       var v = (rel.tag_name || "").replace(/^v/, "");
       var size = dmg ? Math.round(dmg.size / 1048576) + " MB" : "";

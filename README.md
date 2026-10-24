@@ -30,6 +30,7 @@ Connect a hard drive, SSD or USB stick formatted on Windows and it mounts **read
 
 - macOS 13 Ventura or later (tested up to macOS 27), Apple silicon or Intel
 - [macFUSE](https://macfuse.github.io/) with its system extension allowed. On Apple silicon, kernel extensions must be enabled in Startup Security Utility — the same requirement as commercial NTFS drivers that ship a kext.
+- macOS 26 or later can skip the kernel extension: turn on macFUSE under System Settings → General → Login Items & Extensions → File System Extensions, and XT NTFS mounts through macFUSE's FSKit backend (slower than the kext). The backend can be chosen in Settings → General (Automatic / Kernel extension / FSKit).
 
 ## Install
 
@@ -51,7 +52,7 @@ Connect a hard drive, SSD or USB stick formatted on Windows and it mounts **read
                                                   │ spawns
                                      ┌────────────▼─────────────┐
                                      │ ntfs-3g + XT raw I/O     │──▶ /dev/rdiskXsY
-                                     │ on macFUSE (kernel)      │
+                                     │ on macFUSE (kext/FSKit)  │
                                      └──────────────────────────┘
 ```
 
@@ -60,6 +61,7 @@ Connect a hard drive, SSD or USB stick formatted on Windows and it mounts **read
   - uses the raw device node (`/dev/rdisk…`) instead of the block node, avoiding the kernel buffer cache's small block-by-block transfers,
   - keeps every device request sector-aligned (read-modify-write at the edges, aligned bounce buffers),
   - sends large requests straight to the disk and gathers small metadata writes (MFT records, index blocks, bitmaps) in a write-back cache that is flushed in disk order by a background thread, on `fsync`, on unmount and before `fork()`.
+- **FSKit backend**: FSKit mounts must be made by the logged-in user and do not survive `fork()`, so the helper hands the raw device to that user for the duration of the mount and runs ntfs-3g in the foreground in the user's session (`launchctl asuser`).
 - **macFUSE options** per profile: large `iosize` (1 MiB / 8 MiB), `noatime`, `negative_vncache`, `noappledouble`, native extended attributes stored as NTFS streams.
 
 ### Testing
@@ -83,7 +85,14 @@ scripts/build-app.sh build/engine/bin build
 scripts/make-dmg.sh "build/XT NTFS.app" build/XT-NTFS.dmg
 ```
 
-GitHub Actions (`.github/workflows/build.yml`) runs the engine tests, builds the universal engine and app on every push, publishes a release with the DMG and a signed `appcast.xml` for `v*` tags, and deploys the website from `docs/`.
+GitHub Actions (`.github/workflows/build.yml`) runs the engine tests, builds the universal engine and app on every push, publishes a release with the DMG and a signed `appcast.xml` for `v*` tags, and publishes the website from `docs/` to the `gh-pages` branch.
+
+### Releasing
+
+1. Add the Sparkle EdDSA private key (base64) as the repository secret `SPARKLE_ED_PRIVATE_KEY` (Settings → Secrets and variables → Actions). Its public half is `Resources/sparkle_public_key.txt`.
+2. Bump `VERSION`, add a section to `CHANGELOG.md`, commit, then `git tag vX.Y.Z && git push --tags`.
+
+Without the secret, the release is still published but is not offered as an in-app update.
 
 ## Notes
 

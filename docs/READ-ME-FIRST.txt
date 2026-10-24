@@ -7,6 +7,9 @@ ENGLISH
    Allow its system extension in System Settings > Privacy & Security.
    On Apple silicon Macs, kernel extensions must be allowed in Startup
    Security Utility (the same requirement as Paragon NTFS).
+   macOS 26 or later: you can skip the kernel extension. Turn on macFUSE
+   in System Settings > General > Login Items & Extensions > File System
+   Extensions; XT NTFS then uses macFUSE's FSKit backend (slower).
 2. Drag "XT NTFS" onto the Applications folder.
 3. XT NTFS is not notarized by Apple. The first time you open it,
    right-click the app and choose Open, or go to System Settings >
@@ -22,6 +25,9 @@ TIẾNG VIỆT
    Cho phép system extension của macFUSE trong Cài đặt hệ thống >
    Quyền riêng tư & Bảo mật. Máy Apple silicon cần bật cho phép kernel
    extension trong Startup Security Utility (giống Paragon NTFS).
+   macOS 26 trở lên: có thể bỏ qua kernel extension. Bật macFUSE trong
+   Cài đặt hệ thống > Cài đặt chung > Mục đăng nhập & Tiện ích mở rộng >
+   Tiện ích hệ thống tệp; XT NTFS sẽ dùng backend FSKit (chậm hơn).
 2. Kéo "XT NTFS" vào thư mục Applications.
 3. XT NTFS chưa được Apple notarize. Lần đầu mở, nhấp chuột phải vào
    app và chọn Open, hoặc vào Cài đặt hệ thống > Quyền riêng tư &

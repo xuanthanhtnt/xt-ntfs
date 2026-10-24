@@ -13,7 +13,7 @@ body = m.group(1).strip() if m else "See CHANGELOG.md."
 print(f"""{body}
 
 ### Install / Cài đặt
-1. Install [macFUSE](https://macfuse.github.io/) and allow its system extension (Apple silicon: kernel extensions must be allowed in Startup Security Utility — the same requirement as Paragon NTFS).
+1. Install [macFUSE](https://macfuse.github.io/) and allow its system extension (Apple silicon: kernel extensions must be allowed in Startup Security Utility — the same requirement as Paragon NTFS). On macOS 26 or later you can instead turn on macFUSE under System Settings → General → Login Items & Extensions → File System Extensions; XT NTFS then uses the FSKit backend.
 2. Open the DMG and drag **XT NTFS** to Applications.
 3. The app is not notarized by Apple: the first time, right-click the app → **Open**, or allow it in System Settings → Privacy & Security → **Open Anyway**.
 4. In XT NTFS, click **XT NTFS** at the bottom of the sidebar → **Install Engine…**.

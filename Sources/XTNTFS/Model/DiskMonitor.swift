@@ -83,8 +83,8 @@ final class DiskMonitor {
             if mount == nil && !mountable && !kind.lowercased().contains("ntfs") { continue }
             // Unmounted APFS volumes on the internal disk are system roles
             // (the sealed system volume, Preboot, VM, ...).
-            let internal = (d[kDADiskDescriptionDeviceInternalKey as String] as? Bool) ?? false
-            if mount == nil && internal && kind.lowercased() == "apfs" { continue }
+            let internalDisk = (d[kDADiskDescriptionDeviceInternalKey as String] as? Bool) ?? false
+            if mount == nil && internalDisk && kind.lowercased() == "apfs" { continue }
 
             let lowerKind = kind.lowercased()
             let isNTFS = lowerKind.contains("ntfs") || (mount?.isXT ?? false) || xtEntry != nil

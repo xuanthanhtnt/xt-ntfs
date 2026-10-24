@@ -13,3 +13,4 @@ First release.
 - Built-in benchmark (sequential write/read with cache bypass, small files) with history, to compare drivers on the same disk.
 - Menu bar extra, notifications, light/dark appearance, English and Vietnamese.
 - In-app updates via Sparkle 2 with EdDSA-signed releases.
+- macFUSE backend choice: kernel extension (fastest) or FSKit (no kernel extension, macOS 15.4+ with macFUSE 5). Automatic mode falls back to FSKit on macOS 26 and later when the kernel extension cannot be loaded.
