@@ -123,7 +123,7 @@ jobs:
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Smoke test (launch and screenshot)
+      - name: Smoke and integration test
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
         env:
@@ -142,6 +142,8 @@ jobs:
           sleep 12
           screencapture -x "$SHOTS/engine.png" || true
           pkill -f "XT NTFS.app/Contents/MacOS/XTNTFS" || true
+          sleep 2
+          scripts/ci-integration.sh "$APP" "$SHOTS" && result=0 || result=$?
           cd "$SHOTS"
           git init -q -b ci-screens
           git config user.name "github-actions[bot]"
@@ -149,6 +151,7 @@ jobs:
           git add -A
           git commit -q -m "Screenshots from ${GITHUB_SHA::7}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-screens
+          exit $result
       - uses: actions/upload-artifact@v4
         with:
           name: XT-NTFS-dmg

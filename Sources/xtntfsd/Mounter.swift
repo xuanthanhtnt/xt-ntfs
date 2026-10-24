@@ -45,6 +45,13 @@ final class Mounter {
         e.isXT || state.mount(bsd: bsd)?.mountPoint == e.on
     }
 
+    /// Like isNTFS, but trusts the boot sector over DiskArbitration's
+    /// description, which is stale right after a volume was reformatted.
+    func isNTFSNow(_ d: DiskDescription) -> Bool {
+        if System.bootSectorOEM(bsd: d.bsdName) == "NTFS    " { return true }
+        return isNTFS(d)
+    }
+
     func xtMount(of bsd: String) -> MountEntry? {
         entries(of: bsd).first { isOurs($0, bsd: bsd) }
     }
@@ -475,7 +482,7 @@ final class Mounter {
 
     func verify(bsd: String, repair: Bool) throws -> String {
         guard let desc = watcher.describe(bsd: bsd) else { throw EngineError("Disk \(bsd) was not found.") }
-        if isNTFS(desc) {
+        if isNTFSNow(desc) {
             let wasXT = xtMount(of: bsd)
             let wasReadOnly = wasXT?.readOnly
             if !entries(of: bsd).isEmpty { try unmount(bsd: bsd) }
@@ -509,7 +516,7 @@ final class Mounter {
         if desc.isWhole && !desc.isLeaf {
             throw EngineError("Select a volume (partition), not a whole disk.")
         }
-        if desc.isInternal && !isNTFS(desc) {
+        if desc.isInternal && !isNTFSNow(desc) {
             throw EngineError("Internal volumes other than NTFS cannot be erased here. Use Disk Utility.")
         }
         let cleanLabel = String(label.trimmingCharacters(in: .whitespacesAndNewlines).prefix(32))
@@ -547,13 +554,19 @@ final class Mounter {
         let newLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newLabel.isEmpty else { throw EngineError("The name cannot be empty.") }
         guard let desc = watcher.describe(bsd: bsd) else { throw EngineError("Disk \(bsd) was not found.") }
-        if isNTFS(desc) {
+        if isNTFSNow(desc) {
             let was = xtMount(of: bsd)
             if !entries(of: bsd).isEmpty { try unmount(bsd: bsd) }
             let r = Shell.run(System.tool("ntfslabel"), ["/dev/" + bsd, newLabel], timeout: 120)
             if !r.ok { throw EngineError(r.combined) }
             if was != nil || state.config.driverEnabled {
-                try mount(bsd: bsd, readOnly: was?.readOnly, label: newLabel)
+                // The rename itself succeeded; a failed remount is reported
+                // as an event instead of failing the rename.
+                do {
+                    try mount(bsd: bsd, readOnly: was?.readOnly, label: newLabel)
+                } catch {
+                    Log.warn("Remount after rename of \(bsd) failed: \(error.localizedDescription)")
+                }
             }
             return
         }
