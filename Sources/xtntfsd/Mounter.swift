@@ -384,11 +384,16 @@ final class Mounter {
         case .compatible:
             return ["XTNTFS_RAWIO": "0"]
         case .balanced:
+            // Read-ahead: 4 chunks of 1 MB fetched by 2 threads.
             return ["XTNTFS_CACHE_MB": "64", "XTNTFS_LINE_KB": "256", "XTNTFS_DIRECT_KB": "1024",
-                    "XTNTFS_DIRTY_MB": "16", "XTNTFS_FLUSH_MS": "1000"]
+                    "XTNTFS_DIRTY_MB": "16", "XTNTFS_FLUSH_MS": "1000",
+                    "XTNTFS_RA_KB": "1024", "XTNTFS_RA_DEPTH": "4", "XTNTFS_RA_THREADS": "2",
+                    "XTNTFS_STATS": "1"]
         case .turbo:
             return ["XTNTFS_CACHE_MB": "256", "XTNTFS_LINE_KB": "512", "XTNTFS_DIRECT_KB": "1024",
-                    "XTNTFS_DIRTY_MB": "64", "XTNTFS_FLUSH_MS": "2000"]
+                    "XTNTFS_DIRTY_MB": "64", "XTNTFS_FLUSH_MS": "2000",
+                    "XTNTFS_RA_KB": "2048", "XTNTFS_RA_DEPTH": "8", "XTNTFS_RA_THREADS": "3",
+                    "XTNTFS_STATS": "1"]
         }
     }
 

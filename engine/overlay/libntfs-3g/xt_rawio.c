@@ -17,14 +17,25 @@
  *
  * Invariants
  * ----------
- *  - Every byte held in a cache line is the most recent data for that
- *    device offset. Lines are always loaded completely before a partial
- *    update, so a line can be written back as a whole at any time.
- *  - A line's dirty range [dlo, dhi) is sector aligned and is the only part
- *    that may differ from the device.
+ *  - Every byte in a cache line's valid range [vlo, vhi) is the most
+ *    recent data for that device offset; bytes outside it are unknown.
+ *    A sector-aligned write into a line that is not cached starts a line
+ *    whose valid range is just what was written (no read from the device:
+ *    new files are written without reading the space around them). A
+ *    read, or a write that would leave a gap in the valid range, first
+ *    fills in the rest of the line from the device.
+ *  - A line's dirty range [dlo, dhi) is sector aligned, lies inside the
+ *    valid range and is the only part that may differ from the device.
  *  - All state is protected by one mutex per device; device I/O issued by
  *    this layer happens with that mutex held, so the background flusher can
  *    never write stale data over a newer direct write.
+ *  - The one exception is read-ahead: reader threads fill a slot that is
+ *    in the LOADING state without holding the mutex. Every device write
+ *    (always made with the mutex held) drops the slots it overlaps, or
+ *    marks a LOADING slot stale so its data is thrown away, so a slot that
+ *    becomes READY never holds data older than the device. Dirty cached
+ *    data is copied over read-ahead data when it is handed out, exactly as
+ *    for direct reads.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -68,10 +79,27 @@
 #define XT_EDGE_SIZE		(64u << 10)
 #define XT_RETRY_NS		(2000ull * 1000000ull)
 #define XT_TICK_MS		100
+#define XT_DEF_RA_KB		1024u
+#define XT_DEF_RA_DEPTH		4u
+#define XT_DEF_RA_THREADS	2u
+#define XT_RA_MAX_THREADS	4u
+#define XT_RA_MIN_REQ		(64u << 10)	/* smaller reads: metadata */
+#define XT_NBUCKETS		10
+
+enum { XT_RA_FREE, XT_RA_QUEUED, XT_RA_LOADING, XT_RA_READY };
+
+struct xt_ra_slot {
+	s64 idx;			/* chunk number (offset >> ra_shift) */
+	u32 len;			/* valid bytes (short at device end) */
+	int state;
+	int stale;			/* overwritten while LOADING */
+	char *data;
+};
 
 struct xt_line {
 	s64 idx;			/* line number (offset >> line_shift) */
-	u32 len;			/* valid bytes (short at device end) */
+	u32 len;			/* line length (short at device end) */
+	u32 vlo, vhi;			/* valid range, vlo == vhi: none */
 	u32 dlo, dhi;			/* dirty range, dlo == dhi: clean */
 	char *data;
 	struct xt_line *hnext;		/* hash chain */
@@ -117,6 +145,24 @@ struct xt_raw {
 
 	u64 st_hits, st_misses, st_direct, st_flushed;
 
+	/* sequential read-ahead */
+	u32 ra_size;			/* chunk size, power of two */
+	u32 ra_shift;
+	u32 ra_depth;			/* chunks kept ahead of the reader */
+	u32 ra_nslots;			/* 0: read-ahead disabled */
+	u32 ra_nthreads;
+	struct xt_ra_slot *ra_slots;
+	s64 ra_next;			/* where a sequential reader goes next */
+	pthread_cond_t ra_work;		/* reader threads: slots queued */
+	pthread_cond_t ra_done;		/* consumers: a slot finished */
+	pthread_t ra_thr[XT_RA_MAX_THREADS];
+	u32 ra_running;			/* reader threads alive */
+	pid_t ra_pid;
+	u64 st_ra_bytes, st_ra_waits;
+
+	/* request size histograms (see size_bucket) */
+	u64 st_rd[XT_NBUCKETS], st_wr[XT_NBUCKETS];
+
 	char *name;
 	struct xt_raw *reg_next;
 };
@@ -158,10 +204,25 @@ static void xt_atfork_child(void)
 	struct xt_raw *r;
 
 	for (r = xt_reg_head; r; r = r->reg_next) {
+		u32 i;
+
 		/* Only the forking thread survives; it owns the mutex. */
 		pthread_mutex_unlock(&r->mtx);
 		pthread_cond_init(&r->cond, NULL);
+		pthread_cond_init(&r->ra_work, NULL);
+		pthread_cond_init(&r->ra_done, NULL);
 		r->thr_running = 0;
+		/* No reader threads here: drop work they will never finish. */
+		r->ra_running = 0;
+		for (i = 0; i < r->ra_nslots; i++) {
+			struct xt_ra_slot *sl = &r->ra_slots[i];
+
+			if (sl->state == XT_RA_QUEUED ||
+			    sl->state == XT_RA_LOADING) {
+				sl->state = XT_RA_FREE;
+				sl->idx = -1;
+			}
+		}
 	}
 	pthread_mutex_unlock(&xt_reg_mtx);
 }
@@ -233,10 +294,53 @@ static void check_align(struct xt_raw *r, s64 off, s64 len)
 	}
 }
 
+/*
+ * Testing aid: XTNTFS_SIMULATE_LATENCY_US and XTNTFS_SIMULATE_MBPS make
+ * every device request take as long as on a real disk: a fixed latency
+ * (which overlaps between concurrent requests, like a queued USB device)
+ * plus the transfer time at the given bandwidth (which does not).
+ */
+static pthread_once_t xt_sim_once = PTHREAD_ONCE_INIT;
+static pthread_mutex_t xt_sim_mtx = PTHREAD_MUTEX_INITIALIZER;
+static u64 xt_sim_lat_ns, xt_sim_ps_per_byte, xt_sim_free_at;
+
+static void xt_sim_init(void)
+{
+	unsigned long mbps = env_ulong("XTNTFS_SIMULATE_MBPS", 0);
+
+	xt_sim_lat_ns = (u64)env_ulong("XTNTFS_SIMULATE_LATENCY_US", 0) * 1000ull;
+	if (mbps)
+		xt_sim_ps_per_byte = 1000000000000ull / ((u64)mbps << 20);
+}
+
+static void sim_device_time(size_t len)
+{
+	u64 now, start, done;
+	struct timespec ts;
+
+	pthread_once(&xt_sim_once, xt_sim_init);
+	if (!xt_sim_lat_ns && !xt_sim_ps_per_byte)
+		return;
+	pthread_mutex_lock(&xt_sim_mtx);
+	now = now_ns();
+	start = xt_sim_free_at > now ? xt_sim_free_at : now;
+	xt_sim_free_at = start + (u64)len * xt_sim_ps_per_byte / 1000ull;
+	done = xt_sim_free_at + xt_sim_lat_ns;
+	pthread_mutex_unlock(&xt_sim_mtx);
+	if (done > now) {
+		ts.tv_sec = (time_t)((done - now) / 1000000000ull);
+		ts.tv_nsec = (long)((done - now) % 1000000000ull);
+		while (nanosleep(&ts, &ts) && errno == EINTR)
+			;
+	}
+}
+
 /* Plain positioned I/O that retries on EINTR and partial transfers. */
 static int sys_pread_full(int fd, void *buf, size_t len, s64 off)
 {
 	char *p = buf;
+
+	sim_device_time(len);
 
 	while (len) {
 		ssize_t n = pread(fd, p, len, (off_t)off);
@@ -260,6 +364,8 @@ static int sys_pwrite_full(int fd, const void *buf, size_t len, s64 off)
 {
 	const char *p = buf;
 
+	sim_device_time(len);
+
 	while (len) {
 		ssize_t n = pwrite(fd, p, len, (off_t)off);
 		if (n < 0) {
@@ -276,6 +382,33 @@ static int sys_pwrite_full(int fd, const void *buf, size_t len, s64 off)
 		len -= (size_t)n;
 	}
 	return 0;
+}
+
+/*
+ * The device range [off, off + len) is about to be written: read-ahead
+ * data for it would be out of date. Called with the mutex held before
+ * every device write.
+ */
+static void ra_invalidate(struct xt_raw *r, s64 off, s64 len)
+{
+	u32 i;
+
+	for (i = 0; i < r->ra_nslots; i++) {
+		struct xt_ra_slot *sl = &r->ra_slots[i];
+		s64 start;
+
+		if (sl->state == XT_RA_FREE)
+			continue;
+		start = sl->idx << r->ra_shift;
+		if (start >= off + len || start + sl->len <= off)
+			continue;
+		if (sl->state == XT_RA_LOADING) {
+			sl->stale = 1;
+		} else {
+			sl->state = XT_RA_FREE;
+			sl->idx = -1;
+		}
+	}
 }
 
 /* Aligned device read; bounces when the memory buffer is misaligned. */
@@ -303,6 +436,7 @@ static int dev_write(struct xt_raw *r, const void *buf, s64 len, s64 off)
 	const char *p = buf;
 
 	check_align(r, off, len);
+	ra_invalidate(r, off, len);
 	if (!((uintptr_t)buf & (XT_MEM_ALIGN - 1)))
 		return sys_pwrite_full(r->fd, buf, (size_t)len, off);
 	while (len > 0) {
@@ -432,6 +566,7 @@ static int line_writeback(struct xt_raw *r, struct xt_line *l)
 		return 0;
 	off = (l->idx << r->line_shift) + l->dlo;
 	check_align(r, off, l->dhi - l->dlo);
+	ra_invalidate(r, off, l->dhi - l->dlo);
 	if (sys_pwrite_full(r->fd, l->data + l->dlo, l->dhi - l->dlo, off))
 		return -1;
 	r->st_flushed += l->dhi - l->dlo;
@@ -474,6 +609,7 @@ static void line_discard(struct xt_raw *r, struct xt_line *l)
 	/* Unused line structure: keep it in the LRU tail for reuse. */
 	l->idx = -1;
 	l->len = 0;
+	l->vlo = l->vhi = 0;
 	l->dlo = l->dhi = 0;
 	if (!l->prev && !l->next && r->lru_head != l) {
 		/* not linked: append to the tail */
@@ -487,10 +623,34 @@ static void line_discard(struct xt_raw *r, struct xt_line *l)
 	}
 }
 
+/* Read the part of @l outside its valid range from the device. */
+static int line_fill(struct xt_raw *r, struct xt_line *l)
+{
+	s64 ls = l->idx << r->line_shift;
+
+	if (l->vlo == 0 && l->vhi == l->len)
+		return 0;
+	r->st_misses++;
+	if (l->vhi <= l->vlo) {
+		if (dev_read(r, l->data, l->len, ls))
+			return -1;
+	} else {
+		/* Keep the valid (maybe dirty) bytes, take the rest. */
+		if (dev_read(r, r->bounce, l->len, ls))
+			return -1;
+		memcpy(l->data, r->bounce, l->vlo);
+		memcpy(l->data + l->vhi, r->bounce + l->vhi, l->len - l->vhi);
+	}
+	l->vlo = 0;
+	l->vhi = l->len;
+	return 0;
+}
+
 /*
- * Return the cached line for @idx, loading it from the device when
- * @load is set. Returns NULL on error (errno set) or past the device end
- * (errno 0).
+ * Return the cached line for @idx. With @load set the whole line is made
+ * valid (read from the device as needed); without it a line that was not
+ * cached comes back with nothing valid, for the caller to write into.
+ * Returns NULL on error (errno set) or past the device end (errno 0).
  */
 static struct xt_line *line_get(struct xt_raw *r, s64 idx, int load)
 {
@@ -504,6 +664,8 @@ static struct xt_line *line_get(struct xt_raw *r, s64 idx, int load)
 			lru_unlink(r, l);
 			lru_push_head(r, l);
 		}
+		if (load && line_fill(r, l))
+			return NULL;
 		return l;
 	}
 	len = line_len_for(r, idx);
@@ -516,6 +678,7 @@ static struct xt_line *line_get(struct xt_raw *r, s64 idx, int load)
 		return NULL;
 	l->idx = idx;
 	l->len = len;
+	l->vlo = l->vhi = 0;
 	l->dlo = l->dhi = 0;
 	if (load) {
 		r->st_misses++;
@@ -525,10 +688,27 @@ static struct xt_line *line_get(struct xt_raw *r, s64 idx, int load)
 			errno = err;
 			return NULL;
 		}
+		l->vhi = len;
 	}
 	hash_insert(r, l);
 	lru_push_head(r, l);
 	return l;
+}
+
+/* The line for @idx with at least [lo, hi) valid. */
+static struct xt_line *line_get_valid(struct xt_raw *r, s64 idx, u32 lo, u32 hi)
+{
+	struct xt_line *l = line_lookup(r, idx);
+
+	if (l && l->vhi > l->vlo && lo >= l->vlo && hi <= l->vhi) {
+		r->st_hits++;
+		if (r->lru_head != l) {
+			lru_unlink(r, l);
+			lru_push_head(r, l);
+		}
+		return l;
+	}
+	return line_get(r, idx, 1);
 }
 
 static int cmp_line(const void *a, const void *b)
@@ -586,6 +766,7 @@ static int flush_all_locked(struct xt_raw *r)
 			continue;
 		}
 		check_align(r, run_off, run_len);
+		ra_invalidate(r, run_off, run_len);
 		if (sys_pwrite_full(r->fd, r->bounce, run_len, run_off)) {
 			ret = -1;
 			r->io_error = errno;
@@ -735,19 +916,21 @@ static s64 cached_read(struct xt_raw *r, char *buf, s64 count, s64 off)
 	while (count > 0) {
 		s64 idx = off >> r->line_shift;
 		u32 lo = (u32)(off & (r->line_size - 1));
-		struct xt_line *l = line_get(r, idx, 1);
+		u32 len = line_len_for(r, idx);
+		struct xt_line *l;
 		s64 n;
 
+		if (!len || lo >= len)
+			break;
+		n = len - lo;
+		if (n > count)
+			n = count;
+		l = line_get_valid(r, idx, lo, lo + (u32)n);
 		if (!l) {
 			if (done || !errno)
 				break;
 			return -1;
 		}
-		if (lo >= l->len)
-			break;
-		n = l->len - lo;
-		if (n > count)
-			n = count;
 		memcpy(buf, l->data + lo, (size_t)n);
 		buf += n;
 		off += n;
@@ -764,7 +947,7 @@ static s64 cached_write(struct xt_raw *r, const char *buf, s64 count, s64 off)
 	while (count > 0) {
 		s64 idx = off >> r->line_shift;
 		u32 lo = (u32)(off & (r->line_size - 1));
-		u32 len = line_len_for(r, idx);
+		u32 len = line_len_for(r, idx), hi;
 		struct xt_line *l;
 		s64 n;
 
@@ -773,15 +956,39 @@ static s64 cached_write(struct xt_raw *r, const char *buf, s64 count, s64 off)
 		n = len - lo;
 		if (n > count)
 			n = count;
-		/* A full-line overwrite does not need the old contents. */
-		l = line_get(r, idx, !(lo == 0 && n == len));
+		hi = lo + (u32)n;
+		if (!(lo & (r->bsize - 1)) && !(hi & (r->bsize - 1))) {
+			/* Whole sectors: the old contents are not needed... */
+			l = line_get(r, idx, 0);
+			/* ...unless the line would end up with a hole in it. */
+			if (l && l->vhi > l->vlo && (hi < l->vlo || lo > l->vhi) &&
+			    line_fill(r, l))
+				l = NULL;
+		} else {
+			/* Partial sectors: their other bytes must be known. */
+			u32 slo = (u32)round_down(lo, r->bsize);
+			u32 shi = (u32)round_up(hi, r->bsize);
+
+			if (shi > len)
+				shi = len;
+			l = line_get_valid(r, idx, slo, shi);
+		}
 		if (!l) {
 			if (done || !errno)
 				break;
 			return -1;
 		}
 		memcpy(l->data + lo, buf, (size_t)n);
-		mark_dirty(r, l, lo, lo + (u32)n);
+		if (l->vhi <= l->vlo) {
+			l->vlo = lo;
+			l->vhi = hi;
+		} else {
+			if (lo < l->vlo)
+				l->vlo = lo;
+			if (hi > l->vhi)
+				l->vhi = hi;
+		}
+		mark_dirty(r, l, lo, hi);
 		buf += n;
 		off += n;
 		count -= n;
@@ -938,6 +1145,233 @@ static s64 direct_write(struct xt_raw *r, const char *buf, s64 count, s64 off)
 }
 
 /* ------------------------------------------------------------------ */
+/* sequential read-ahead                                              */
+/* ------------------------------------------------------------------ */
+
+/*
+ * A file read through FUSE arrives as a series of requests, each answered
+ * before the next one is sent, so the device would sit idle between them.
+ * Once a reader is seen going sequentially, reader threads fetch the
+ * next few chunks while the current request is being answered.
+ */
+
+static struct xt_ra_slot *ra_find(struct xt_raw *r, s64 idx)
+{
+	u32 i;
+
+	for (i = 0; i < r->ra_nslots; i++)
+		if (r->ra_slots[i].state != XT_RA_FREE &&
+		    r->ra_slots[i].idx == idx)
+			return &r->ra_slots[i];
+	return NULL;
+}
+
+/* A slot that may be (re)used for the window [lo, hi). */
+static struct xt_ra_slot *ra_take_slot(struct xt_raw *r, s64 lo, s64 hi)
+{
+	struct xt_ra_slot *spare = NULL;
+	u32 i;
+
+	for (i = 0; i < r->ra_nslots; i++) {
+		struct xt_ra_slot *sl = &r->ra_slots[i];
+
+		if (sl->state == XT_RA_FREE)
+			return sl;
+		/* A slot being filled belongs to its reader thread. */
+		if (!spare && sl->state != XT_RA_LOADING &&
+		    (sl->idx < lo || sl->idx >= hi))
+			spare = sl;
+	}
+	return spare;
+}
+
+static struct xt_ra_slot *ra_next_queued(struct xt_raw *r)
+{
+	struct xt_ra_slot *best = NULL;
+	u32 i;
+
+	for (i = 0; i < r->ra_nslots; i++) {
+		struct xt_ra_slot *sl = &r->ra_slots[i];
+
+		if (sl->state == XT_RA_QUEUED && (!best || sl->idx < best->idx))
+			best = sl;
+	}
+	return best;
+}
+
+static void *ra_main(void *arg)
+{
+	struct xt_raw *r = arg;
+	sigset_t all;
+	pid_t me = getpid();
+
+	sigfillset(&all);
+	pthread_sigmask(SIG_BLOCK, &all, NULL);
+
+	pthread_mutex_lock(&r->mtx);
+	while (!r->closing && r->ra_pid == me) {
+		struct xt_ra_slot *sl = ra_next_queued(r);
+		s64 off;
+		u32 len;
+		char *data;
+		int err;
+
+		if (!sl) {
+			pthread_cond_wait(&r->ra_work, &r->mtx);
+			continue;
+		}
+		sl->state = XT_RA_LOADING;
+		sl->stale = 0;
+		off = sl->idx << r->ra_shift;
+		len = sl->len;
+		data = sl->data;
+		pthread_mutex_unlock(&r->mtx);
+		err = sys_pread_full(r->fd, data, len, off);
+		pthread_mutex_lock(&r->mtx);
+		/* Nobody else touches a LOADING slot, so sl is still ours. */
+		if (err || sl->stale) {
+			sl->state = XT_RA_FREE;
+			sl->idx = -1;
+		} else {
+			sl->state = XT_RA_READY;
+		}
+		pthread_cond_broadcast(&r->ra_done);
+	}
+	pthread_mutex_unlock(&r->mtx);
+	return NULL;
+}
+
+static void ensure_ra_threads(struct xt_raw *r)
+{
+	pid_t me = getpid();
+
+	if (r->closing || (r->ra_running && r->ra_pid == me))
+		return;
+	r->ra_pid = me;
+	r->ra_running = 0;
+	while (r->ra_running < r->ra_nthreads) {
+		if (pthread_create(&r->ra_thr[r->ra_running], NULL, ra_main, r))
+			break;
+		r->ra_running++;
+	}
+	if (!r->ra_running) {
+		ntfs_log_error("xt_rawio: no read-ahead thread\n");
+		r->ra_nthreads = 0;	/* read-ahead off from now on */
+	}
+}
+
+/* Queue the chunks from the one holding @off up to the read-ahead depth. */
+static void ra_schedule(struct xt_raw *r, s64 off)
+{
+	s64 first = off >> r->ra_shift, idx;
+	int queued = 0;
+
+	for (idx = first; idx < first + (s64)r->ra_depth; idx++) {
+		s64 start = idx << r->ra_shift;
+		struct xt_ra_slot *sl;
+
+		if (start >= r->devsize)
+			break;
+		if (ra_find(r, idx))
+			continue;
+		sl = ra_take_slot(r, first, first + r->ra_depth);
+		if (!sl)
+			break;
+		sl->idx = idx;
+		sl->len = r->devsize - start < (s64)r->ra_size ?
+				(u32)(r->devsize - start) : r->ra_size;
+		sl->state = XT_RA_QUEUED;
+		sl->stale = 0;
+		queued = 1;
+	}
+	if (queued) {
+		ensure_ra_threads(r);
+		pthread_cond_broadcast(&r->ra_work);
+	}
+}
+
+/*
+ * Copy as much of [off, off + count) as read-ahead can provide, waiting
+ * for chunks that are on their way. Returns the bytes copied (may be 0);
+ * the caller reads the rest the usual way.
+ */
+static s64 ra_read(struct xt_raw *r, char *buf, s64 count, s64 off)
+{
+	s64 done = 0;
+
+	ra_schedule(r, off);
+	while (done < count) {
+		s64 o = off + done;
+		s64 idx = o >> r->ra_shift;
+		s64 start = idx << r->ra_shift, n;
+		struct xt_ra_slot *sl = ra_find(r, idx);
+
+		while (sl && (sl->state == XT_RA_QUEUED ||
+			      sl->state == XT_RA_LOADING)) {
+			if (!r->ra_running || r->ra_pid != getpid())
+				return done;	/* nobody to fill it */
+			r->st_ra_waits++;
+			pthread_cond_wait(&r->ra_done, &r->mtx);
+			sl = ra_find(r, idx);
+		}
+		if (!sl || sl->state != XT_RA_READY)
+			break;
+		n = start + sl->len - o;
+		if (n > count - done)
+			n = count - done;
+		if (n <= 0)
+			break;
+		memcpy(buf + done, sl->data + (o - start), (size_t)n);
+		/*
+		 * Newer cached data goes on top right away: once we wait for
+		 * the next chunk, the flusher may write it out and mark it
+		 * clean, and it would no longer be found.
+		 */
+		overlay_dirty(r, buf + done, n, o);
+		done += n;
+		if (o + n >= start + sl->len) {
+			/* Chunk used up: recycle it for the next one. */
+			sl->state = XT_RA_FREE;
+			sl->idx = -1;
+			ra_schedule(r, o + n);
+		}
+	}
+	r->st_ra_bytes += done;
+	return done;
+}
+
+static void ra_stop(struct xt_raw *r)
+{
+	u32 i, n;
+	int join;
+
+	pthread_mutex_lock(&r->mtx);
+	r->closing = 1;
+	join = r->ra_running && r->ra_pid == getpid();
+	n = r->ra_running;
+	pthread_cond_broadcast(&r->ra_work);
+	pthread_mutex_unlock(&r->mtx);
+	if (join)
+		for (i = 0; i < n; i++)
+			pthread_join(r->ra_thr[i], NULL);
+	r->ra_running = 0;
+}
+
+/* Request size classes: <4K <16K <64K <128K <256K <512K <1M <2M <4M >=4M */
+static int size_bucket(s64 n)
+{
+	static const s64 lim[XT_NBUCKETS - 1] = {
+		4 << 10, 16 << 10, 64 << 10, 128 << 10, 256 << 10,
+		512 << 10, 1 << 20, 2 << 20, 4 << 20 };
+	int i;
+
+	for (i = 0; i < XT_NBUCKETS - 1; i++)
+		if (n < lim[i])
+			return i;
+	return XT_NBUCKETS - 1;
+}
+
+/* ------------------------------------------------------------------ */
 /* public API                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -1010,7 +1444,7 @@ struct xt_raw *xt_raw_attach(int fd, int writable, const char *name)
 	unsigned long v;
 	u32 bsize;
 	s64 size;
-	u32 hsize;
+	u32 hsize, i;
 
 	pthread_once(&xt_atfork_once, xt_atfork_install);
 
@@ -1063,6 +1497,33 @@ struct xt_raw *xt_raw_attach(int fd, int writable, const char *name)
 	r->flush_ns = (u64)env_ulong("XTNTFS_FLUSH_MS", XT_DEF_FLUSH_MS)
 			* 1000000ull;
 
+	/* Read-ahead: XTNTFS_RA_KB=0 turns it off. */
+	v = env_ulong("XTNTFS_RA_KB", XT_DEF_RA_KB) << 10;
+	if (v && (!is_pow2(v) || v < 64ul << 10 || v > (64ul << 20)))
+		v = XT_DEF_RA_KB << 10;
+	if (v && v < bsize)
+		v = bsize;
+	r->ra_size = (u32)v;
+	if (r->ra_size) {
+		r->ra_shift = ilog2_u32(r->ra_size);
+		v = env_ulong("XTNTFS_RA_DEPTH", XT_DEF_RA_DEPTH);
+		r->ra_depth = v < 1 ? 1 : v > 64 ? 64 : (u32)v;
+		v = env_ulong("XTNTFS_RA_THREADS", XT_DEF_RA_THREADS);
+		r->ra_nthreads = v < 1 ? 1 : v > XT_RA_MAX_THREADS ?
+				XT_RA_MAX_THREADS : (u32)v;
+		r->ra_nslots = r->ra_depth + 2;
+		r->ra_slots = calloc(r->ra_nslots, sizeof(*r->ra_slots));
+		if (!r->ra_slots)
+			goto err;
+		for (i = 0; i < r->ra_nslots; i++) {
+			r->ra_slots[i].idx = -1;
+			if (posix_memalign((void **)&r->ra_slots[i].data,
+					XT_MEM_ALIGN, r->ra_size))
+				goto err;
+		}
+	}
+	r->ra_next = -1;
+
 	r->bounce_size = XT_BOUNCE_MIN > r->line_size ? XT_BOUNCE_MIN
 						      : r->line_size;
 	if (posix_memalign((void **)&r->bounce, XT_MEM_ALIGN, r->bounce_size))
@@ -1086,6 +1547,8 @@ struct xt_raw *xt_raw_attach(int fd, int writable, const char *name)
 	r->name = name ? strdup(name) : NULL;
 	pthread_mutex_init(&r->mtx, NULL);
 	pthread_cond_init(&r->cond, NULL);
+	pthread_cond_init(&r->ra_work, NULL);
+	pthread_cond_init(&r->ra_done, NULL);
 
 	pthread_mutex_lock(&xt_reg_mtx);
 	r->reg_next = xt_reg_head;
@@ -1093,11 +1556,15 @@ struct xt_raw *xt_raw_attach(int fd, int writable, const char *name)
 	pthread_mutex_unlock(&xt_reg_mtx);
 
 	ntfs_log_debug("xt_rawio: %s sector=%u size=%lld line=%u cache=%u "
-		"lines direct>=%u\n", name ? name : "?", r->bsize,
-		(long long)r->devsize, r->line_size, r->nlines_max,
-		r->direct_min);
+		"lines direct>=%u read-ahead=%ux%u\n", name ? name : "?",
+		r->bsize, (long long)r->devsize, r->line_size, r->nlines_max,
+		r->direct_min, r->ra_size, r->ra_depth);
 	return r;
 err:
+	if (r->ra_slots)
+		for (i = 0; i < r->ra_nslots; i++)
+			free(r->ra_slots[i].data);
+	free(r->ra_slots);
 	free(r->bounce);
 	free(r->edge);
 	free(r->hash);
@@ -1109,7 +1576,7 @@ err:
 
 s64 xt_raw_pread(struct xt_raw *r, void *buf, s64 count, s64 offset)
 {
-	s64 ret;
+	s64 ret, pre = 0;
 
 	if (count < 0 || offset < 0) {
 		errno = EINVAL;
@@ -1122,10 +1589,25 @@ s64 xt_raw_pread(struct xt_raw *r, void *buf, s64 count, s64 offset)
 	}
 	if (count > r->devsize - offset)
 		count = r->devsize - offset;
-	if (count >= (s64)r->direct_min)
-		ret = direct_read(r, buf, count, offset);
+	r->st_rd[size_bucket(count)]++;
+	/* File data read in order: serve it from read-ahead. */
+	if (r->ra_nthreads && count >= (s64)XT_RA_MIN_REQ) {
+		if (offset == r->ra_next)
+			pre = ra_read(r, buf, count, offset);
+		r->ra_next = offset + count;
+		if (pre == count) {
+			ret = pre;
+			goto out;
+		}
+	}
+	if (count - pre >= (s64)r->direct_min)
+		ret = direct_read(r, (char *)buf + pre, count - pre, offset + pre);
 	else
-		ret = small_read(r, buf, count, offset);
+		ret = small_read(r, (char *)buf + pre, count - pre, offset + pre);
+	if (ret < 0)
+		ret = pre ? pre : -1;
+	else
+		ret += pre;
 out:
 	pthread_mutex_unlock(&r->mtx);
 	return ret;
@@ -1155,6 +1637,7 @@ s64 xt_raw_pwrite(struct xt_raw *r, const void *buf, s64 count, s64 offset)
 	}
 	if (count > r->devsize - offset)
 		count = r->devsize - offset;
+	r->st_wr[size_bucket(count)]++;
 	if (count >= (s64)r->direct_min)
 		ret = direct_write(r, buf, count, offset);
 	else
@@ -1227,7 +1710,9 @@ int xt_raw_detach(struct xt_raw *r)
 	struct xt_raw **pp;
 	struct xt_line *l, *next;
 	int join, ret;
+	u32 i;
 
+	ra_stop(r);
 	pthread_mutex_lock(&r->mtx);
 	r->closing = 1;
 	join = r->thr_running && r->thr_pid == getpid();
@@ -1244,13 +1729,27 @@ int xt_raw_detach(struct xt_raw *r)
 			strerror(r->io_error));
 	pthread_mutex_unlock(&r->mtx);
 
-	if (getenv("XTNTFS_STATS"))
+	if (getenv("XTNTFS_STATS")) {
+		static const char *names[XT_NBUCKETS] = { "<4K", "<16K",
+			"<64K", "<128K", "<256K", "<512K", "<1M", "<2M",
+			"<4M", ">=4M" };
+
 		fprintf(stderr, "xt_rawio stats: hits=%llu misses=%llu "
-			"direct=%llu flushed=%llu\n",
+			"direct=%llu flushed=%llu readahead=%llu waits=%llu\n",
 			(unsigned long long)r->st_hits,
 			(unsigned long long)r->st_misses,
 			(unsigned long long)r->st_direct,
-			(unsigned long long)r->st_flushed);
+			(unsigned long long)r->st_flushed,
+			(unsigned long long)r->st_ra_bytes,
+			(unsigned long long)r->st_ra_waits);
+		fprintf(stderr, "xt_rawio request sizes (reads/writes):");
+		for (i = 0; i < XT_NBUCKETS; i++)
+			if (r->st_rd[i] || r->st_wr[i])
+				fprintf(stderr, " %s:%llu/%llu", names[i],
+					(unsigned long long)r->st_rd[i],
+					(unsigned long long)r->st_wr[i]);
+		fprintf(stderr, "\n");
+	}
 
 	pthread_mutex_lock(&xt_reg_mtx);
 	for (pp = &xt_reg_head; *pp; pp = &(*pp)->reg_next)
@@ -1267,6 +1766,11 @@ int xt_raw_detach(struct xt_raw *r)
 	}
 	pthread_mutex_destroy(&r->mtx);
 	pthread_cond_destroy(&r->cond);
+	pthread_cond_destroy(&r->ra_work);
+	pthread_cond_destroy(&r->ra_done);
+	for (i = 0; i < r->ra_nslots; i++)
+		free(r->ra_slots[i].data);
+	free(r->ra_slots);
 	free(r->bounce);
 	free(r->edge);
 	free(r->hash);

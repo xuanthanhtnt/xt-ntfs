@@ -291,9 +291,9 @@ enum ProfileText {
         case .compatible:
             return NSLocalizedString("Block device and kernel buffer cache, like stock ntfs-3g. Use if a disk misbehaves.", comment: "")
         case .balanced:
-            return NSLocalizedString("Raw device I/O, 64 MB write-back cache, 1 MB transfers. Recommended.", comment: "")
+            return NSLocalizedString("Raw device I/O, 64 MB write-back cache, 4 MB read-ahead. Recommended.", comment: "")
         case .turbo:
-            return NSLocalizedString("Raw device I/O, 256 MB cache, 8 MB transfers. Fastest for large files; eject before unplugging.", comment: "")
+            return NSLocalizedString("Raw device I/O, 256 MB cache, 16 MB read-ahead. For very fast disks; eject before unplugging.", comment: "")
         }
     }
 }

@@ -177,8 +177,8 @@
 "Balanced" = "Cân bằng";
 "Turbo" = "Turbo";
 "Block device and kernel buffer cache, like stock ntfs-3g. Use if a disk misbehaves." = "Dùng block device và bộ đệm của kernel, giống ntfs-3g gốc. Dùng khi ổ gặp trục trặc.";
-"Raw device I/O, 64 MB write-back cache, 1 MB transfers. Recommended." = "I/O trực tiếp trên raw device, bộ đệm ghi 64 MB, khối truyền 1 MB. Khuyên dùng.";
-"Raw device I/O, 256 MB cache, 8 MB transfers. Fastest for large files; eject before unplugging." = "I/O trực tiếp trên raw device, bộ đệm 256 MB, khối truyền 8 MB. Nhanh nhất với file lớn; nhớ tháo ổ trước khi rút.";
+"Raw device I/O, 64 MB write-back cache, 4 MB read-ahead. Recommended." = "I/O trực tiếp trên raw device, bộ đệm ghi 64 MB, đọc trước 4 MB. Khuyên dùng.";
+"Raw device I/O, 256 MB cache, 16 MB read-ahead. For very fast disks; eject before unplugging." = "I/O trực tiếp trên raw device, bộ đệm 256 MB, đọc trước 16 MB. Dành cho ổ rất nhanh; nhớ tháo ổ trước khi rút.";
 "XT NTFS Website" = "Trang chủ XT NTFS";
 "Show Engine Log" = "Xem nhật ký engine";
 "The XT NTFS engine service is not running." = "Dịch vụ engine XT NTFS chưa chạy.";

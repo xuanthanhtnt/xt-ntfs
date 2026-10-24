@@ -22,7 +22,11 @@
  *     the caller's buffer is suitably aligned),
  *   - a write-back cache for small metadata I/O (MFT records, index
  *     blocks, bitmaps), flushed in offset order by a background thread,
- *     on sync, on close and before fork().
+ *     on sync, on close and before fork(). Sector-aligned writes into
+ *     space that is not cached do not read the surrounding cache line
+ *     first (new files cost no device reads),
+ *   - read-ahead for sequential reads: background threads fetch the next
+ *     chunks while FUSE hands the current one to the application.
  *
  * Tuning (environment variables, read when the device is opened):
  *   XTNTFS_RAWIO=0            disable this layer (plain unix I/O)
@@ -31,6 +35,14 @@
  *   XTNTFS_DIRECT_KB=1024     requests >= this size bypass the cache
  *   XTNTFS_DIRTY_MB=16        flush synchronously above this much dirty data
  *   XTNTFS_FLUSH_MS=1000      background flush delay for dirty data
+ *   XTNTFS_RA_KB=1024         read-ahead chunk size in KiB (0 = off)
+ *   XTNTFS_RA_DEPTH=4         chunks kept ahead of a sequential reader
+ *   XTNTFS_RA_THREADS=2       read-ahead threads (device queue depth)
+ *   XTNTFS_STATS=1            print cache and request size statistics
+ *                             to stderr when the device is closed
+ *   XTNTFS_SIMULATE_LATENCY_US, XTNTFS_SIMULATE_MBPS
+ *                             (testing) make each device request take as
+ *                             long as on a real disk
  *   XTNTFS_SIMULATE_RAW=N     treat any device/file as raw with N-byte sectors
  *                             (testing; misaligned device I/O aborts)
  *   XTNTFS_SIMULATE_ODIRECT=1 (Linux testing) open with O_DIRECT

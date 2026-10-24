@@ -33,11 +33,13 @@ jobs:
             engine/tests/rawio_stress.c "$SRC/libntfs-3g/xt_rawio.c" "$SRC/libntfs-3g/unix_io.c" \
             "$SRC/libntfs-3g/.libs/libntfs-3g.a" -lpthread -o rawio_stress
           export ASAN_OPTIONS=detect_leaks=0
-          for cfg in "512 64 256" "4096 64 256" "512 1 16" "4096 0 256" "512 2 32"; do
+          # sector size, cache MB, line KB, read-ahead KB, read-ahead depth
+          for cfg in "512 64 256 1024 4" "4096 64 256 1024 4" "512 1 16 256 2" "4096 0 256 1024 3" \
+                     "512 2 32 128 6" "4096 2 64 256 1" "512 64 256 0 4" "4096 16 1024 4096 8"; do
             set -- $cfg
-            echo "sector=$1 cache=$2MB line=$3KB"
-            XTNTFS_SIMULATE_RAW=$1 XTNTFS_CACHE_MB=$2 XTNTFS_LINE_KB=$3 XTNTFS_FLUSH_MS=20 \
-              ./rawio_stress "$RUNNER_TEMP/scratch.img" 32 15000 1 $RANDOM
+            echo "sector=$1 cache=$2MB line=$3KB read-ahead=$4KBx$5"
+            XTNTFS_SIMULATE_RAW=$1 XTNTFS_CACHE_MB=$2 XTNTFS_LINE_KB=$3 XTNTFS_RA_KB=$4 XTNTFS_RA_DEPTH=$5 \
+              XTNTFS_FLUSH_MS=20 ./rawio_stress "$RUNNER_TEMP/scratch.img" 32 15000 1 $RANDOM
           done
           XTNTFS_SIMULATE_RAW=512 XTNTFS_SIMULATE_ODIRECT=1 ./rawio_stress "$RUNNER_TEMP/scratch.img" 32 15000 1 7
       - name: Thread sanitizer
@@ -47,6 +49,9 @@ jobs:
             engine/tests/rawio_stress.c "$SRC/libntfs-3g/xt_rawio.c" "$SRC/libntfs-3g/unix_io.c" \
             "$SRC/libntfs-3g/.libs/libntfs-3g.a" -lpthread -o rawio_tsan
           XTNTFS_SIMULATE_RAW=512 XTNTFS_CACHE_MB=2 XTNTFS_FLUSH_MS=1 ./rawio_tsan "$RUNNER_TEMP/scratch.img" 16 8000 0 5
+          # Read-ahead threads racing with writes and the flusher.
+          XTNTFS_SIMULATE_RAW=4096 XTNTFS_CACHE_MB=4 XTNTFS_LINE_KB=64 XTNTFS_RA_KB=128 XTNTFS_RA_DEPTH=6 \
+            XTNTFS_RA_THREADS=3 XTNTFS_FLUSH_MS=1 ./rawio_tsan "$RUNNER_TEMP/scratch.img" 16 8000 0 11
       - name: End-to-end FUSE test
         run: |
           sudo -E env "PATH=$PATH" E2E_WORK="$RUNNER_TEMP/e2e" E2E_SIZE_MB=1024 \

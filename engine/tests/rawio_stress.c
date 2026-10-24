@@ -4,6 +4,9 @@
  * Runs random reads/writes/seeks/syncs/forks through libntfs-3g's unix
  * device operations against a scratch file while keeping an in-memory
  * reference image, then checks every read and the final on-disk content.
+ * Part of the reads form sequential streams (like a file read through
+ * FUSE) so read-ahead is used, while writes keep landing just ahead of
+ * the stream to catch stale read-ahead data.
  *
  * Build (from an ntfs-3g tree built by engine/build-ntfs3g.sh):
  *   cc -O2 -I$SRC -I$SRC/include/ntfs-3g -DHAVE_CONFIG_H rawio_stress.c \
@@ -98,7 +101,8 @@ int main(int argc, char **argv)
 	struct ntfs_device *dev;
 	int fd, use_fork, forked = 0;
 	u64 seed;
-	unsigned long nread = 0, nwrite = 0, nsync = 0;
+	unsigned long nread = 0, nwrite = 0, nsync = 0, nstream = 0;
+	s64 stream = -1;		/* next offset of the sequential reader */
 
 	if (argc < 5) {
 		fprintf(stderr, "usage: %s file size_mb ops fork [seed]\n",
@@ -140,9 +144,36 @@ int main(int argc, char **argv)
 		if (len > (8 << 20))
 			len = 8 << 20;
 		off = pick_off(devsize, len);
+		/* Some writes go just ahead of the sequential reader. */
+		if (op >= 40 && op < 85 && stream >= 0 && rnd() % 3 == 0)
+			off = stream + rnd_range(-(64 << 10), 6 << 20);
+		if (off < 0)
+			off = 0;
+		if (off > devsize)
+			off = devsize;
 		exp = off + len > devsize ? devsize - off : len;
 
-		if (op < 40) {				/* pread */
+		if (op < 22) {				/* sequential stream */
+			if (stream < 0 || stream >= devsize || rnd() % 60 == 0)
+				stream = rnd_range(0, devsize / 2);
+			len = rnd() % 8 ? rnd_range(64 << 10, 1536 << 10)
+					: rnd_range(1, 128 << 10);
+			if (rnd() % 4 == 0)	/* FUSE-like sizes */
+				len = (s64)(128 << 10) << (rnd() % 4);
+			off = stream;
+			exp = off + len > devsize ? devsize - off : len;
+			n = dev->d_ops->pread(dev, buf, len, off);
+			if (n != exp)
+				fail("stream pread size", off, len);
+			if (n > 0 && memcmp(buf, ref + off, n)) {
+				s64 k;
+				for (k = 0; k < n && buf[k] == ref[off + k]; k++)
+					;
+				fail("stream pread data", off + k, len);
+			}
+			stream = off + n;
+			nstream++;
+		} else if (op < 40) {			/* pread */
 			n = dev->d_ops->pread(dev, buf, len, off);
 			if (n != exp)
 				fail("pread size", off, len);
@@ -223,7 +254,7 @@ int main(int argc, char **argv)
 		}
 	}
 	close(fd);
-	printf("OK reads=%lu writes=%lu syncs=%lu forks=%d\n", nread, nwrite,
-	       nsync, forked);
+	printf("OK reads=%lu stream=%lu writes=%lu syncs=%lu forks=%d\n",
+	       nread, nstream, nwrite, nsync, forked);
 	return 0;
 }

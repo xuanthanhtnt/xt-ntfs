@@ -1,8 +1,14 @@
 # Nhật ký thay đổi
 
-## [Chưa phát hành]
+## [1.1.0] - 2026-10-24
 
+Tăng tốc engine, dựa trên số đo thực tế so với Paragon NTFS trên ổ SSD USB 3.
+
+- **Đọc trước (read-ahead):** khi một file được đọc tuần tự, engine tải sẵn các đoạn tiếp theo bằng luồng nền trong lúc app đang nhận đoạn hiện tại, nên ổ không còn đứng chờ giữa các yêu cầu của macFUSE. Chế độ Cân bằng đọc trước 4 MB (2 luồng), Turbo 16 MB (3 luồng).
+- **Ghi không cần đọc trước:** trước đây mỗi lần ghi vào vùng chưa có trong bộ đệm, engine phải đọc cả khối 256 KB quanh đó từ ổ rồi mới ghi. Với file mới (ntfs-3g đặt mỗi file ở một vùng trống khác nhau), nghĩa là mỗi file nhỏ tốn thêm một lần đọc ổ. Giờ các lần ghi thẳng hàng sector ghi thẳng vào bộ đệm, không đọc gì từ ổ. Trong thử nghiệm mô phỏng độ trễ USB, tạo file nhỏ nhanh gấp khoảng 3 lần và ghi tuần tự nhanh gấp khoảng 1,8 lần.
+- Engine ghi thống kê kích thước yêu cầu đọc/ghi vào `/Library/Logs/XTNTFS-<ổ>.log` khi tháo ổ, để tối ưu tiếp dựa trên số liệu thật.
 - Sửa lỗi ổ mới cắm vào hiện biểu đồ dung lượng của ổ cũ khi macOS cấp lại cùng tên thiết bị (ví dụ `disk7s2`).
+- Kiểm thử: bài stress ngẫu nhiên có thêm các luồng đọc tuần tự xen với ghi ngay phía trước (chạy dưới ASan/UBSan và ThreadSanitizer), và bài kiểm tra FUSE đầu-cuối đối chiếu với ntfs-3g gốc.
 
 ## [1.0.4] - 2026-10-24
 
