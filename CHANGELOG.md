@@ -1,5 +1,11 @@
 # Nhật ký thay đổi
 
+## [1.0.2] - 2026-10-24
+
+- Sửa lỗi mount với macFUSE: bỏ tuỳ chọn `defer_permissions` vì ntfs-3g đã tự dùng `default_permissions` khi gán quyền sở hữu, và macFUSE từ chối khi có cả hai.
+- Hiện nguyên văn lỗi của macFUSE khi mount thất bại.
+- Sửa lỗi app bỏ sót thông báo sau khi engine khởi động lại (số thứ tự sự kiện không còn đếm lại từ 1).
+
 ## [1.0.1] - 2026-10-24
 
 Sửa lỗi phát hiện khi cài thử trên máy Mac M1 chạy macOS 27 với macFUSE 5.5.

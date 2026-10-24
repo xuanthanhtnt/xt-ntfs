@@ -275,7 +275,9 @@ final class Mounter {
         let kernel = backend != .fskit
         if kernel {
             // Options implemented by the macFUSE kernel extension only.
-            o += ["allow_other", "defer_permissions", "daemon_timeout=120"]
+            // (No defer_permissions: ntfs-3g adds default_permissions when
+            // it maps ownership, and macFUSE rejects the combination.)
+            o += ["allow_other", "daemon_timeout=120"]
             if FileManager.default.fileExists(atPath: XTPaths.volumeIconPath) {
                 o.append("volicon=\(XTPaths.volumeIconPath.replacingOccurrences(of: ",", with: "\\,"))")
             }
@@ -419,6 +421,9 @@ final class Mounter {
     private func explain(_ r: CommandResult, backend: FUSEBackend) -> String {
         let text = r.combined
         let lower = text.lowercased()
+        if let line = text.split(separator: "\n").first(where: { $0.hasPrefix("mount_macfuse:") }) {
+            return "macFUSE refused the mount: " + line.dropFirst("mount_macfuse:".count).trimmingCharacters(in: .whitespaces)
+        }
         if lower.contains("kernel extension is not loaded") {
             return "The macFUSE kernel extension is not loaded. Allow it in System Settings › Privacy & Security and restart the Mac, or choose the FSKit backend in XT NTFS settings."
         }

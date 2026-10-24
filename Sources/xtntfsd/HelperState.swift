@@ -8,7 +8,9 @@ final class HelperState {
     private var _config: EngineConfig
     private var mounts: [String: ManagedMount] = [:]
     private var events: [HelperEvent] = []
-    private var nextEventID = 1
+    /// Event IDs keep increasing across helper restarts, so the app (which
+    /// asks for events newer than the last one it saw) never misses any.
+    private var nextEventID = Int(Date().timeIntervalSince1970 * 1000)
 
     init() {
         _config = HelperState.loadConfig()
