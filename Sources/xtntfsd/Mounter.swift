@@ -3,7 +3,12 @@ import XTShared
 
 struct EngineError: Error, LocalizedError {
     var message: String
-    init(_ message: String) { self.message = message }
+    /// Processes keeping a volume busy, when an unmount failed because of them.
+    var inUse: [String]? = nil
+    init(_ message: String, inUse: [String]? = nil) {
+        self.message = message
+        self.inUse = inUse
+    }
     var errorDescription: String? { message }
 }
 
@@ -479,7 +484,12 @@ final class Mounter {
         }
         for e in mounts {
             if let err = unmountPath(e.on, force: force) {
-                throw EngineError("Could not unmount \(e.on). Close any files or apps using it and try again.\n\(err)")
+                let users = System.processesUsing(e.on)
+                Log.warn("Unmount of \(e.on) failed: \(err); in use by: \(users.isEmpty ? "unknown" : users.joined(separator: ", "))")
+                if users.isEmpty {
+                    throw EngineError("Could not unmount \(e.on). Close any files or apps using it and try again.\n\(err)", inUse: [])
+                }
+                throw EngineError("Could not unmount \(e.on) because it is in use by: \(users.joined(separator: ", ")). Quit these apps or close their files and try again.", inUse: users)
             }
             if isOurs(e, bsd: bsd) {
                 // Wait for ntfs-3g to write back its cache and close the device.
@@ -505,6 +515,14 @@ final class Mounter {
     @discardableResult
     func unmountPath(_ path: String, force: Bool) -> String? {
         var r = Shell.run("/usr/sbin/diskutil", ["unmount", path], timeout: 120)
+        // Spotlight, Quick Look and Finder often hold a just-used volume for
+        // a moment; give them a few seconds before reporting it busy.
+        var attempt = 1
+        while !r.ok && !force && attempt < 4 && MountTable.entry(at: path) != nil {
+            usleep(1_500_000)
+            r = Shell.run("/usr/sbin/diskutil", ["unmount", path], timeout: 120)
+            attempt += 1
+        }
         if !r.ok && force {
             r = Shell.run("/usr/sbin/diskutil", ["unmount", "force", path], timeout: 120)
         }
@@ -524,13 +542,17 @@ final class Mounter {
         for bsd in ourBSDNames() { try? unmount(bsd: bsd, force: true) }
     }
 
-    func eject(bsd: String) throws {
+    func eject(bsd: String, force: Bool = false) throws {
         let whole = NTFSNames.wholeDisk(of: bsd)
         for b in ourBSDNames() where NTFSNames.wholeDisk(of: b) == whole {
-            try unmount(bsd: b)
+            try unmount(bsd: b, force: force)
         }
-        if let err = watcher.unmount(bsd: whole, whole: true) {
-            throw EngineError(err)
+        if let err = watcher.unmount(bsd: whole, force: force, whole: true) {
+            // Another volume of the disk (not ours) is busy.
+            let users = MountTable.entries()
+                .filter { $0.bsdName.map { NTFSNames.wholeDisk(of: $0) == whole } ?? false }
+                .flatMap { System.processesUsing($0.on) }
+            throw EngineError(err, inUse: (force || users.isEmpty) ? nil : users)
         }
         if let err = watcher.eject(bsd: whole) {
             throw EngineError(err)

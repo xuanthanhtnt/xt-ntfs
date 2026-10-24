@@ -23,6 +23,8 @@ struct Volume: Identifiable, Equatable {
     var totalBytes: Int64?
     var freeBytes: Int64?
     var operatingSystem: String?
+    /// USB link speed in bits per second (nil if not USB or unknown).
+    var linkSpeed: Int64? = nil
 
     var isMounted: Bool { mountPoint != nil }
     var devicePath: String { "/dev/" + bsdName }

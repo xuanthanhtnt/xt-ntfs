@@ -282,6 +282,9 @@ public struct HelperResponse: Codable, Sendable {
     public var error: String?
     public var output: String?
     public var status: HelperStatus?
+    /// Set when an unmount failed because the volume is busy: the processes
+    /// using it (may be empty when they could not be determined).
+    public var inUse: [String]?
 
     public init(ok: Bool, error: String? = nil, output: String? = nil, status: HelperStatus? = nil) {
         self.ok = ok

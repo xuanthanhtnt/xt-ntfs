@@ -15,7 +15,12 @@ struct MainView: View {
         .ignoresSafeArea()
         .frame(minWidth: 860, minHeight: 560)
         .alert(item: $model.alert) { a in
-            Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
+            if let title = a.actionTitle, let action = a.action {
+                return Alert(title: Text(a.title), message: Text(a.message),
+                             primaryButton: .destructive(Text(title), action: action),
+                             secondaryButton: .cancel(Text(NSLocalizedString("Cancel", comment: ""))))
+            }
+            return Alert(title: Text(a.title), message: Text(a.message), dismissButton: .default(Text("OK")))
         }
         .sheet(item: $model.report) { r in
             ReportSheet(report: r).environmentObject(model)

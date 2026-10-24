@@ -6,6 +6,9 @@ struct AlertItem: Identifiable {
     let id = UUID()
     var title: String
     var message: String
+    /// Optional destructive action offered next to Cancel.
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
 }
 
 struct ReportItem: Identifiable {
@@ -130,11 +133,33 @@ final class AppModel: ObservableObject {
             if let s = r.status { status = s }
             rebuild()
             return r
+        } catch let busyError as VolumeBusyError where request.command == .unmount || request.command == .eject {
+            offerForce(busyError, request: request, activity: activity)
+            await refreshStatus()
+            return nil
         } catch {
             alert = AlertItem(title: activity, message: error.localizedDescription)
             await refreshStatus()
             return nil
         }
+    }
+
+    /// The volume could not be unmounted because apps are using it: say
+    /// which ones and offer to force it, like Disk Utility does.
+    private func offerForce(_ error: VolumeBusyError, request: HelperRequest, activity: String) {
+        let eject = request.command == .eject
+        alert = AlertItem(
+            title: NSLocalizedString("The volume is in use", comment: ""),
+            message: error.localizedDescription + "\n\n"
+                + NSLocalizedString("Forcing it closes those files; the apps may lose unsaved changes.", comment: ""),
+            actionTitle: eject ? NSLocalizedString("Force Eject", comment: "")
+                               : NSLocalizedString("Force Unmount", comment: ""),
+            action: { [weak self] in
+                guard let self else { return }
+                var forced = request
+                forced.enabled = true
+                Task { _ = await self.run(request.bsdName, activity, forced) }
+            })
     }
 
     private func needsEngineAlert() {

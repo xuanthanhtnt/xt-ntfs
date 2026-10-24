@@ -221,7 +221,7 @@ final class Helper: DiskWatcherDelegate {
 
         case .eject:
             guard let bsd = req.bsdName else { return missingDisk() }
-            return perform { try self.mounter.eject(bsd: bsd); return nil }
+            return perform { try self.mounter.eject(bsd: bsd, force: req.enabled ?? false); return nil }
 
         case .unmountAll:
             return perform { self.mounter.unmountAll(); return nil }
@@ -270,6 +270,7 @@ final class Helper: DiskWatcherDelegate {
             } catch {
                 response = HelperResponse(ok: false, error: error.localizedDescription,
                                           status: status(since: Int.max))
+                response.inUse = (error as? EngineError)?.inUse
             }
         }
         return response

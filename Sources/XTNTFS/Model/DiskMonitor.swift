@@ -124,6 +124,9 @@ final class DiskMonitor {
                 mediaName: d[kDADiskDescriptionMediaNameKey as String] as? String,
                 deviceProtocol: d[kDADiskDescriptionDeviceProtocolKey as String] as? String,
                 totalBytes: nil, freeBytes: nil, operatingSystem: nil)
+            if v.deviceProtocol == "USB" {
+                v.linkSpeed = LinkSpeed.bitsPerSecond(bsd: bsd)
+            }
             if let mp = v.mountPoint, let u = MountTable.usage(of: mp) {
                 v.totalBytes = u.total
                 v.freeBytes = u.free

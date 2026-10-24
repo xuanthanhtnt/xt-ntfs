@@ -218,3 +218,15 @@
 "Copy Path" = "Chép đường dẫn";
 "Restart Engine" = "Khởi động lại engine";
 "The macFUSE kernel extension is not loaded. Allow it in System Settings › Privacy & Security and restart the Mac, or choose the FSKit backend in XT NTFS settings." = "Kernel extension của macFUSE chưa được nạp. Hãy cho phép nó trong Cài đặt hệ thống › Quyền riêng tư & Bảo mật rồi khởi động lại máy, hoặc chọn backend FSKit trong cài đặt XT NTFS.";
+
+/* Volume busy */
+"The volume is in use" = "Ổ đang được sử dụng";
+"Another app is using the volume. Close any files on it and try again." = "Một ứng dụng khác đang dùng ổ này. Hãy đóng các tệp đang mở trên ổ rồi thử lại.";
+"These apps are using the volume: %@. Quit them or close their files and try again." = "Các ứng dụng sau đang dùng ổ: %@. Hãy thoát chúng hoặc đóng các tệp đang mở rồi thử lại.";
+"Forcing it closes those files; the apps may lose unsaved changes." = "Nếu ép tháo, các tệp đó sẽ bị đóng và ứng dụng có thể mất những thay đổi chưa lưu.";
+"Force Unmount" = "Ép tháo";
+"Force Eject" = "Ép đẩy ra";
+
+/* USB link speed */
+"Connection" = "Kết nối";
+"This disk is connected at USB 2.0 speed, which limits it to about 40 MB/s with any NTFS driver. Use a USB 3 cable (5 Gb/s or faster) and plug it straight into the Mac for full speed." = "Ổ này đang kết nối ở tốc độ USB 2.0, nên với driver NTFS nào cũng chỉ đạt khoảng 40 MB/s. Hãy dùng dây USB 3 (5 Gb/s trở lên) và cắm thẳng vào Mac để đạt tốc độ tối đa.";

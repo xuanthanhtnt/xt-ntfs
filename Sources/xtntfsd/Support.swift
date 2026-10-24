@@ -211,6 +211,26 @@ enum System {
         return nil  // other errors are reported by the engine
     }
 
+    /// Processes that have files (or their working directory) open on the
+    /// file system mounted at @path, as "Name (pid)". Used to tell the user
+    /// what keeps a volume busy.
+    static func processesUsing(_ path: String) -> [String] {
+        // -b: avoid kernel calls that can block; +f --: treat path as a
+        // mounted file system and list everything open on it.
+        let r = Shell.run("/usr/sbin/lsof", ["-b", "-n", "-P", "-w", "-F", "pc", "+f", "--", path], timeout: 15)
+        var result: [String] = []
+        var pid: Int32 = 0
+        for line in r.stdout.split(whereSeparator: \.isNewline) {
+            if line.hasPrefix("p") {
+                pid = Int32(line.dropFirst()) ?? 0
+            } else if line.hasPrefix("c"), pid != getpid() {
+                let item = "\(line.dropFirst()) (\(pid))"
+                if !result.contains(item) { result.append(item) }
+            }
+        }
+        return result
+    }
+
     /// Reads the OEM id of a volume's boot sector ("NTFS    ", "-FVE-FS-", ...).
     static func bootSectorOEM(bsd: String) -> String? {
         let fd = open("/dev/r" + bsd, O_RDONLY)

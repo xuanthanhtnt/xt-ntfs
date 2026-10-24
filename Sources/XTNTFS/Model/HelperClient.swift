@@ -2,6 +2,20 @@ import Foundation
 import AppKit
 import XTShared
 
+/// An unmount or eject failed because apps have files open on the volume.
+struct VolumeBusyError: LocalizedError {
+    /// "Name (pid)" of each process using the volume; empty if unknown.
+    var users: [String]
+
+    var errorDescription: String? {
+        if users.isEmpty {
+            return NSLocalizedString("Another app is using the volume. Close any files on it and try again.", comment: "")
+        }
+        return String(format: NSLocalizedString("These apps are using the volume: %@. Quit them or close their files and try again.", comment: ""),
+                      users.joined(separator: ", "))
+    }
+}
+
 /// Async access to the privileged helper.
 enum HelperClient {
     static func send(_ request: HelperRequest, timeout: Double = 3600) async throws -> HelperResponse {
@@ -20,7 +34,10 @@ enum HelperClient {
     @discardableResult
     static func perform(_ request: HelperRequest) async throws -> HelperResponse {
         let r = try await send(request)
-        if !r.ok { throw HelperSocketError.failed(r.error ?? NSLocalizedString("The operation failed.", comment: "")) }
+        if !r.ok {
+            if let users = r.inUse { throw VolumeBusyError(users: users) }
+            throw HelperSocketError.failed(r.error ?? NSLocalizedString("The operation failed.", comment: ""))
+        }
         return r
     }
 

@@ -55,6 +55,13 @@ struct BenchmarkView: View {
                 }
                 .padding(.vertical, 4)
             }
+            if let v = candidates.first(where: { $0.bsdName == target }),
+               let bps = v.linkSpeed, LinkSpeed.isSlow(bps) {
+                Label(LinkSpeedText.slowWarning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !model.benchmarkHistory.isEmpty {
                 history
             }

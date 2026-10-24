@@ -99,6 +99,18 @@ struct VolumeDetailView: View {
                         }
                     }
                     InfoRow(label: NSLocalizedString("Device", comment: "")) { Text(volume.devicePath) }
+                    if let bps = volume.linkSpeed {
+                        InfoRow(label: NSLocalizedString("Connection", comment: "")) {
+                            HStack(spacing: 6) {
+                                Text(LinkSpeed.describe(bps))
+                                if LinkSpeed.isSlow(bps) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.orange)
+                                        .help(LinkSpeedText.slowWarning)
+                                }
+                            }
+                        }
+                    }
                     InfoRow(label: NSLocalizedString("File System", comment: "")) { Text(fileSystemText) }
                     if let driver = volume.driverName {
                         InfoRow(label: NSLocalizedString("Driver", comment: "")) { Text(driver) }
@@ -281,6 +293,12 @@ enum ProfileText {
         case .turbo:
             return NSLocalizedString("Raw device I/O, 256 MB cache, 8 MB transfers. Fastest for large files; eject before unplugging.", comment: "")
         }
+    }
+}
+
+enum LinkSpeedText {
+    static var slowWarning: String {
+        NSLocalizedString("This disk is connected at USB 2.0 speed, which limits it to about 40 MB/s with any NTFS driver. Use a USB 3 cable (5 Gb/s or faster) and plug it straight into the Mac for full speed.", comment: "")
     }
 }
 
