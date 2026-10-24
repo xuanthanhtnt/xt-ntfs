@@ -244,6 +244,15 @@ jobs:
             gh release upload "$TAG" dist/appcast.xml --repo "$GITHUB_REPOSITORY" --clobber
             echo "Attached dist/appcast.xml to $TAG"
           fi
+      - name: Sync release notes from CHANGELOG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            python3 scripts/release-notes.py "$VERSION" > "$RUNNER_TEMP/notes.md"
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
       - name: Publish docs/ to the gh-pages branch
         env:
           GH_TOKEN: ${{ github.token }}
