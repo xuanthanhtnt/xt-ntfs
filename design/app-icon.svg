@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4F7BFF"/>
+      <stop offset="0.55" stop-color="#2D47C9"/>
+      <stop offset="1" stop-color="#1B276E"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.3" cy="0.18" r="0.75">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.5" stop-color="#E3E8F2"/>
+      <stop offset="1" stop-color="#B9C2D4"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8E99B3"/>
+      <stop offset="1" stop-color="#5D6884"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFE27A"/>
+      <stop offset="1" stop-color="#FFB02E"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0A1240" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <!-- squircle -->
+  <g filter="url(#shadow)">
+    <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+    <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#glow)"/>
+    <rect x="101.5" y="101.5" width="821" height="821" rx="185" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="3"/>
+  </g>
+  <!-- XT monogram -->
+  <g fill="#FFFFFF">
+    <path d="M262 214 h96 l66 104 l66 -104 h96 l-114 170 l120 178 h-96 l-72 -112 l-72 112 h-96 l120 -178 z" opacity="0.97"/>
+    <path d="M592 214 h240 v80 h-76 v268 h-88 v-268 h-76 z" opacity="0.97"/>
+  </g>
+  <!-- drive -->
+  <g filter="url(#soft)">
+    <rect x="212" y="600" width="600" height="190" rx="34" fill="url(#edge)"/>
+    <rect x="212" y="590" width="600" height="172" rx="34" fill="url(#metal)"/>
+    <rect x="252" y="636" width="300" height="12" rx="6" fill="#9AA5BE"/>
+    <rect x="252" y="664" width="300" height="12" rx="6" fill="#9AA5BE"/>
+    <rect x="252" y="692" width="300" height="12" rx="6" fill="#9AA5BE"/>
+    <circle cx="752" cy="676" r="17" fill="#33D17A"/>
+    <circle cx="752" cy="676" r="26" fill="#33D17A" opacity="0.25"/>
+  </g>
+  <!-- speed bolt -->
+  <path d="M664 616 l-50 78 h38 l-22 62 l74 -94 h-40 l28 -46 z" fill="url(#bolt)" stroke="#C77700" stroke-width="5" stroke-linejoin="round"/>
+</svg>

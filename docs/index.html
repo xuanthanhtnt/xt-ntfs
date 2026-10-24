@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="vi" data-lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XT NTFS – Ghi ổ NTFS trên Mac</title>
+<meta name="description" content="XT NTFS mounts Windows NTFS drives read-write on macOS as soon as you connect them. Free and open source.">
+<link rel="icon" type="image/png" href="assets/icon-256.png">
+<link rel="apple-touch-icon" href="assets/icon-256.png">
+<meta property="og:title" content="XT NTFS">
+<meta property="og:description" content="Read-write NTFS for macOS. Free and open source.">
+<meta property="og:image" content="https://xuanthanhtnt.github.io/xt-ntfs/assets/icon-512.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --alu: #E7EAF0;
+    --alu-2: #D8DDE7;
+    --alu-3: #C4CBD8;
+    --ink: #141A2C;
+    --ink-2: #4A536B;
+    --cobalt: #2F4BD1;
+    --cobalt-ink: #FFFFFF;
+    --led: #22B567;
+    --amber: #E3922A;
+    --free: #CDD3DF;
+    --shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 18px 40px -24px rgba(20,26,44,.45);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --alu: #11151E;
+      --alu-2: #1A202D;
+      --alu-3: #2A3242;
+      --ink: #E8ECF5;
+      --ink-2: #A0A9BF;
+      --cobalt: #6F8CFF;
+      --cobalt-ink: #0D1330;
+      --led: #3DDB86;
+      --amber: #F2AC4A;
+      --free: #252C3B;
+      --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 18px 40px -24px rgba(0,0,0,.8);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--alu);
+    color: var(--ink);
+    font-family: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    font-variation-settings: "wdth" 100;
+  }
+  html[data-lang="vi"] [lang="en"], html[data-lang="en"] [lang="vi"] { display: none !important; }
+  a { color: var(--cobalt); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--cobalt); outline-offset: 3px; border-radius: 6px; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+
+  /* top bar */
+  .top { display: flex; align-items: center; gap: 14px; padding: 22px 0; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; text-decoration: none; color: var(--ink); font-variation-settings: "wdth" 112; }
+  .brand img { width: 34px; height: 34px; }
+  .top nav { margin-left: auto; display: flex; align-items: center; gap: 22px; font-size: 15px; }
+  .top nav a { color: var(--ink-2); text-decoration: none; }
+  .top nav a:hover { color: var(--ink); }
+  .lang { border: 1px solid var(--alu-3); background: transparent; color: var(--ink); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+
+  /* hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 56px; align-items: center; padding: 48px 0 84px; }
+  h1 {
+    font-variation-settings: "wdth" 122;
+    font-weight: 800;
+    font-size: clamp(40px, 5.6vw, 68px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 22px;
+  }
+  .lede { font-size: 19px; color: var(--ink-2); max-width: 33em; margin: 0 0 30px; }
+  .cta { display: inline-flex; align-items: center; gap: 12px; background: var(--cobalt); color: var(--cobalt-ink); text-decoration: none; font-weight: 700; font-size: 18px; padding: 15px 24px; border-radius: 12px; box-shadow: 0 10px 24px -12px var(--cobalt); }
+  .cta:hover { filter: brightness(1.06); }
+  .cta svg { width: 20px; height: 20px; }
+  .fine { font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+
+  /* cluster map: the drive being written */
+  .plate { background: var(--alu-2); border-radius: 18px; padding: 22px 22px 16px; box-shadow: var(--shadow); position: relative; }
+  .plate-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; font-size: 14px; color: var(--ink-2); }
+  .plate-head strong { color: var(--ink); font-variation-settings: "wdth" 112; }
+  .led { width: 10px; height: 10px; border-radius: 50%; background: var(--led); box-shadow: 0 0 0 4px color-mix(in srgb, var(--led) 25%, transparent); }
+  .led.busy { animation: blink .18s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .map { display: grid; grid-template-columns: repeat(28, 1fr); gap: 3px; }
+  .map i { aspect-ratio: 1; border-radius: 2px; background: var(--free); transition: background-color .25s ease; }
+  .map i.d { background: var(--cobalt); }
+  .map i.m { background: var(--amber); }
+  .map i.w { background: var(--led); transition: none; }
+  .legend { display: flex; gap: 8px 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--ink-2); margin-top: 14px; }
+  .legend > span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; vertical-align: -1px; background: var(--c); }
+
+  section { padding: 72px 0; border-top: 1px solid var(--alu-3); }
+  h2 { font-variation-settings: "wdth" 118; font-weight: 800; font-size: clamp(28px, 3.4vw, 40px); line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 18px; }
+  .intro { color: var(--ink-2); max-width: 40em; margin: 0 0 36px; font-size: 18px; }
+
+  /* sequence */
+  .steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 34px; counter-reset: s; }
+  .steps li { counter-increment: s; }
+  .steps li::before { content: counter(s); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--cobalt); color: var(--cobalt); font-weight: 800; margin-bottom: 14px; }
+  .steps h3, .install h3 { margin: 0 0 6px; font-size: 19px; font-variation-settings: "wdth" 110; }
+  .steps p, .install p { margin: 0; color: var(--ink-2); }
+
+  /* speed */
+  .speed { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start; }
+  .bars { background: var(--alu-2); border-radius: 18px; padding: 26px; box-shadow: var(--shadow); }
+  .bars h3 { margin: 0 0 4px; font-size: 17px; font-variation-settings: "wdth" 110; }
+  .bars .sub { margin: 0 0 22px; font-size: 14.5px; color: var(--ink-2); }
+  .bar { margin-bottom: 16px; }
+  .bar .label { display: flex; justify-content: space-between; font-size: 15px; margin-bottom: 6px; }
+  .bar .track { height: 18px; background: var(--free); border-radius: 5px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 5px; background: var(--c); width: var(--w); }
+  .speed p { margin: 0 0 16px; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; background: var(--alu-2); padding: 1px 5px; border-radius: 4px; }
+
+  /* features */
+  .features { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 56px; }
+  .features li { break-inside: avoid; padding: 0 0 18px 24px; position: relative; }
+  .features li::before { content: ""; position: absolute; left: 2px; top: .58em; width: 9px; height: 9px; border-radius: 50%; background: var(--led); }
+  .features li.ro::before { background: var(--amber); }
+  .features strong { display: block; font-variation-settings: "wdth" 108; }
+  .features span.d { color: var(--ink-2); }
+
+  /* install */
+  .install { list-style: none; padding: 0; margin: 0; counter-reset: i; display: grid; gap: 22px; max-width: 46em; }
+  .install li { counter-increment: i; display: grid; grid-template-columns: 52px 1fr; }
+  .install li::before { content: counter(i); font-variation-settings: "wdth" 125; font-weight: 800; font-size: 30px; line-height: 1; color: var(--cobalt); }
+
+  .notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 56px; }
+  .notes h3 { margin: 0 0 4px; font-size: 17px; font-variation-settings: "wdth" 108; }
+  .notes p { margin: 0; color: var(--ink-2); }
+
+  footer { padding: 40px 0 60px; border-top: 1px solid var(--alu-3); color: var(--ink-2); font-size: 14.5px; }
+  footer p { margin: 0 0 6px; }
+
+  @media (max-width: 880px) {
+    .hero, .speed { grid-template-columns: 1fr; gap: 40px; }
+    .steps { grid-template-columns: 1fr; gap: 26px; }
+    .features { columns: 1; }
+    .notes { grid-template-columns: 1fr; }
+    .top nav a.hide-s { display: none; }
+  }
+  @media (max-width: 480px) {
+    .wrap { padding: 0 16px; }
+    .map { gap: 2px; }
+    .install li { grid-template-columns: 40px 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .led.busy { animation: none; }
+    .map i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./"><img src="assets/icon-256.png" alt="">XT NTFS</a>
+    <nav>
+      <a class="hide-s" href="#how"><span lang="vi">Cách hoạt động</span><span lang="en">How it works</span></a>
+      <a class="hide-s" href="#install"><span lang="vi">Cài đặt</span><span lang="en">Install</span></a>
+      <a href="https://github.com/xuanthanhtnt/xt-ntfs">GitHub</a>
+      <button class="lang" id="lang" type="button" aria-label="Language">EN</button>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>
+          <span lang="vi">Ghi vào ổ NTFS trên Mac, như ổ của chính Mac.</span>
+          <span lang="en">Write to Windows drives on your Mac, like any other disk.</span>
+        </h1>
+        <p class="lede">
+          <span lang="vi">Cắm ổ cứng, USB hay SSD định dạng trên Windows vào là dùng được ngay: chép, sửa, đổi tên, xoá file trong Finder. XT NTFS miễn phí và mã nguồn mở.</span>
+          <span lang="en">Plug in a hard drive, USB stick or SSD formatted on Windows and use it right away: copy, edit, rename and delete files in Finder. XT NTFS is free and open source.</span>
+        </p>
+        <a class="cta" id="download" href="https://github.com/xuanthanhtnt/xt-ntfs/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m6.5 10 5.5 5.5 5.5-5.5"/><path d="M5 20h14"/></svg>
+          <span lang="vi">Tải XT NTFS cho macOS</span><span lang="en">Download XT NTFS for macOS</span>
+        </a>
+        <p class="fine" id="release-line">
+          <span lang="vi">Dành cho macOS 13 trở lên, chip Apple và Intel. Cần cài macFUSE.</span>
+          <span lang="en">For macOS 13 or later, Apple silicon and Intel. Requires macFUSE.</span>
+        </p>
+      </div>
+
+      <div class="plate" aria-label="Animation: clusters being written to an NTFS volume">
+        <div class="plate-head">
+          <strong>Data (NTFS)</strong>
+          <span style="display:flex;align-items:center;gap:10px">
+            <span id="map-status"><span lang="vi">Đọc/ghi</span><span lang="en">Read-write</span></span>
+            <span class="led" id="led"></span>
+          </span>
+        </div>
+        <div class="map" id="map" aria-hidden="true"></div>
+        <div class="legend">
+          <span style="--c: var(--cobalt)"><span lang="vi">Dữ liệu</span><span lang="en">File data</span></span>
+          <span style="--c: var(--amber)"><span lang="vi">Metadata (MFT, chỉ mục)</span><span lang="en">Metadata (MFT, indexes)</span></span>
+          <span style="--c: var(--led)"><span lang="vi">Đang ghi</span><span lang="en">Writing</span></span>
+          <span style="--c: var(--free)"><span lang="vi">Trống</span><span lang="en">Free</span></span>
+        </div>
+      </div>
+    </div>
+
+    <section id="how">
+      <h2><span lang="vi">Cách hoạt động</span><span lang="en">How it works</span></h2>
+      <p class="intro">
+        <span lang="vi">Không cần mở app mỗi lần dùng. Một dịch vụ nền nhỏ lo việc mount, còn app dùng để quản lý ổ và cài đặt.</span>
+        <span lang="en">You don't need to open the app each time. A small background service handles mounting; the app is for managing volumes and settings.</span>
+      </p>
+      <ol class="steps">
+        <li>
+          <h3><span lang="vi">Bạn cắm ổ</span><span lang="en">You connect a disk</span></h3>
+          <p><span lang="vi">macOS nhận ra ổ NTFS và định mount nó ở chế độ chỉ đọc như mặc định.</span><span lang="en">macOS detects the NTFS volume and is about to mount it read-only, as usual.</span></p>
+        </li>
+        <li>
+          <h3><span lang="vi">XT NTFS nhận việc</span><span lang="en">XT NTFS takes over</span></h3>
+          <p><span lang="vi">Dịch vụ nền từ chối lần mount chỉ đọc đó và mount lại bằng engine XT ở chế độ đọc/ghi.</span><span lang="en">The background service declines that read-only mount and mounts the volume read-write with the XT engine.</span></p>
+        </li>
+        <li>
+          <h3><span lang="vi">Dùng như ổ bình thường</span><span lang="en">Use it like any disk</span></h3>
+          <p><span lang="vi">Ổ hiện trong Finder. Khi xong việc, bấm Eject để dữ liệu được ghi hết rồi mới rút.</span><span lang="en">The volume appears in Finder. When you're done, eject it so every write reaches the disk before you unplug.</span></p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="speed">
+      <div class="speed">
+        <div>
+          <h2><span lang="vi">Nhanh nhờ đâu</span><span lang="en">Where the speed comes from</span></h2>
+          <p>
+            <span lang="vi">ntfs-3g gốc trên macOS đọc ghi qua <code>/dev/disk</code>, nơi kernel chia mọi thao tác thành khối nhỏ vài KB. Engine XT dùng <code>/dev/rdisk</code>: file lớn đi thẳng xuống ổ theo khối tới 8 MB, còn các lần ghi nhỏ vào MFT, chỉ mục và bitmap được gom trong bộ đệm rồi ghi theo thứ tự.</span>
+            <span lang="en">Stock ntfs-3g on macOS goes through <code>/dev/disk</code>, where the kernel splits every transfer into blocks of a few KB. The XT engine uses <code>/dev/rdisk</code>: large files go straight to the disk in transfers of up to 8 MB, while small writes to the MFT, indexes and bitmaps are gathered in a cache and written in disk order.</span>
+          </p>
+          <p>
+            <span lang="vi">Tốc độ thực tế phụ thuộc ổ và cổng kết nối, nên app có sẵn công cụ đo tốc độ. Bạn có thể đo cùng một ổ với XT NTFS rồi với driver NTFS khác để so sánh.</span>
+            <span lang="en">Real-world speed depends on the disk and the port, so the app includes a benchmark. Measure the same disk with XT NTFS and with another NTFS driver to compare.</span>
+          </p>
+        </div>
+        <div class="bars">
+          <h3><span lang="vi">Chép 3.000 file nhỏ vào ổ NTFS</span><span lang="en">Copying 3,000 small files to NTFS</span></h3>
+          <p class="sub"><span lang="vi">Kiểm thử của dự án: engine XT trên ảnh đĩa mở bằng O_DIRECT (giống raw device), cùng máy, cùng dữ liệu. Ít hơn là tốt hơn.</span><span lang="en">Project test: XT engine on a disk image opened with O_DIRECT (raw-device behaviour), same machine and data. Lower is better.</span></p>
+          <div class="bar">
+            <div class="label"><span><span lang="vi">Bộ đệm XT bật</span><span lang="en">XT cache on</span></span><strong>1,25 s</strong></div>
+            <div class="track"><div class="fill" style="--w: 17%; --c: var(--led)"></div></div>
+          </div>
+          <div class="bar">
+            <div class="label"><span><span lang="vi">Bộ đệm XT tắt</span><span lang="en">XT cache off</span></span><strong>7,21 s</strong></div>
+            <div class="track"><div class="fill" style="--w: 100%; --c: var(--alu-3)"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <h2><span lang="vi">Mọi thứ cần cho ổ NTFS</span><span lang="en">Everything an NTFS disk needs</span></h2>
+      <ul class="features">
+        <li><strong><span lang="vi">Tự mount đọc/ghi</span><span lang="en">Automatic read-write mounting</span></strong><span class="d"><span lang="vi">Ngay khi cắm ổ, kể cả khi app đang đóng.</span><span lang="en">As soon as the disk is connected, even with the app closed.</span></span></li>
+        <li><strong><span lang="vi">Mount, Unmount, Kiểm tra, Xoá</span><span lang="en">Mount, Unmount, Verify, Erase</span></strong><span class="d"><span lang="vi">Định dạng lại thành NTFS, ExFAT, FAT32, APFS hoặc Mac OS Extended; đổi tên ổ.</span><span lang="en">Reformat as NTFS, ExFAT, FAT32, APFS or Mac OS Extended; rename volumes.</span></span></li>
+        <li class="ro"><strong><span lang="vi">Windows ngủ đông và Fast Startup</span><span lang="en">Hibernated Windows and Fast Startup</span></strong><span class="d"><span lang="vi">Mount chỉ đọc để an toàn, hoặc xoá dữ liệu ngủ đông nếu bạn chọn.</span><span lang="en">Mounted read-only to stay safe, or hibernation data removed if you choose.</span></span></li>
+        <li><strong><span lang="vi">Tuỳ chọn từng ổ</span><span lang="en">Per-volume options</span></strong><span class="d"><span lang="vi">Chỉ đọc, không tự mount, bật hoặc tắt Spotlight.</span><span lang="en">Read-only, no automount, Spotlight on or off.</span></span></li>
+        <li><strong><span lang="vi">Ba chế độ hiệu năng</span><span lang="en">Three performance profiles</span></strong><span class="d"><span lang="vi">Tương thích, Cân bằng và Turbo cho file thật lớn.</span><span lang="en">Compatible, Balanced, and Turbo for very large files.</span></span></li>
+        <li><strong><span lang="vi">Đo tốc độ tích hợp</span><span lang="en">Built-in benchmark</span></strong><span class="d"><span lang="vi">Ghi, đọc tuần tự và file nhỏ, có lưu lịch sử để so sánh.</span><span lang="en">Sequential write, read and small files, with history for comparisons.</span></span></li>
+        <li><strong><span lang="vi">Thanh menu và thông báo</span><span lang="en">Menu bar and notifications</span></strong><span class="d"><span lang="vi">Mount, tháo ổ nhanh từ thanh menu; báo khi ổ sẵn sàng hoặc có lỗi.</span><span lang="en">Mount and eject from the menu bar; get told when a disk is ready or needs attention.</span></span></li>
+        <li><strong><span lang="vi">Tự cập nhật</span><span lang="en">Automatic updates</span></strong><span class="d"><span lang="vi">Bản mới tải từ GitHub và được kiểm tra chữ ký trước khi cài.</span><span lang="en">New versions come from GitHub and are signature-checked before installing.</span></span></li>
+      </ul>
+    </section>
+
+    <section id="install">
+      <h2><span lang="vi">Cài đặt</span><span lang="en">Install</span></h2>
+      <ol class="install">
+        <li><div><h3><span lang="vi">Cài macFUSE</span><span lang="en">Install macFUSE</span></h3><p><span lang="vi">Tải tại <a href="https://macfuse.github.io/">macfuse.github.io</a> và cho phép system extension trong Quyền riêng tư &amp; Bảo mật. Máy chip Apple cần bật kernel extension trong Startup Security Utility, giống yêu cầu của các driver NTFS thương mại.</span><span lang="en">Get it from <a href="https://macfuse.github.io/">macfuse.github.io</a> and allow its system extension in Privacy &amp; Security. Apple silicon Macs need kernel extensions enabled in Startup Security Utility, the same requirement as commercial NTFS drivers.</span></p></div></li>
+        <li><div><h3><span lang="vi">Kéo XT NTFS vào Applications</span><span lang="en">Drag XT NTFS to Applications</span></h3><p><span lang="vi">Mở file DMG vừa tải và kéo app vào thư mục Applications.</span><span lang="en">Open the downloaded DMG and drag the app into Applications.</span></p></div></li>
+        <li><div><h3><span lang="vi">Mở app lần đầu</span><span lang="en">Open it the first time</span></h3><p><span lang="vi">App chưa được Apple notarize, nên lần đầu hãy nhấp chuột phải vào app và chọn Open, hoặc vào Quyền riêng tư &amp; Bảo mật và bấm “Vẫn mở”.</span><span lang="en">The app isn't notarized by Apple, so the first time right-click it and choose Open, or click “Open Anyway” in Privacy &amp; Security.</span></p></div></li>
+        <li><div><h3><span lang="vi">Cài engine</span><span lang="en">Install the engine</span></h3><p><span lang="vi">Bấm XT NTFS ở cuối thanh bên rồi chọn “Cài engine…” và nhập mật khẩu quản trị. Từ giờ cắm ổ NTFS là ghi được.</span><span lang="en">Click XT NTFS at the bottom of the sidebar, choose “Install Engine…” and enter an administrator password. From now on, NTFS disks are writable when you plug them in.</span></p></div></li>
+      </ol>
+    </section>
+
+    <section id="notes">
+      <h2><span lang="vi">Cần biết trước</span><span lang="en">Good to know</span></h2>
+      <div class="notes">
+        <div><h3><span lang="vi">Luôn Eject trước khi rút</span><span lang="en">Always eject before unplugging</span></h3><p><span lang="vi">Engine giữ một phần dữ liệu trong bộ đệm để ghi nhanh hơn. Eject đảm bảo mọi thứ đã nằm trên ổ.</span><span lang="en">The engine holds some writes in its cache to go faster. Ejecting makes sure everything is on the disk.</span></p></div>
+        <div><h3><span lang="vi">Kiểm tra và sửa lỗi</span><span lang="en">Verify and repair</span></h3><p><span lang="vi">XT NTFS sửa được lỗi thường gặp bằng ntfsfix. Để kiểm tra toàn diện, hãy chạy chkdsk trên Windows.</span><span lang="en">XT NTFS fixes common problems with ntfsfix. For a complete check, run chkdsk on Windows.</span></p></div>
+        <div><h3><span lang="vi">BitLocker</span><span lang="en">BitLocker</span></h3><p><span lang="vi">Ổ mã hoá BitLocker chưa được hỗ trợ.</span><span lang="en">BitLocker-encrypted volumes are not supported.</span></p></div>
+        <div><h3><span lang="vi">Mã nguồn mở</span><span lang="en">Open source</span></h3><p><span lang="vi">GPL-2.0, dựa trên ntfs-3g và chạy trên macFUSE. Không liên quan tới Microsoft hay Paragon Software.</span><span lang="en">GPL-2.0, built on ntfs-3g and running on macFUSE. Not affiliated with Microsoft or Paragon Software.</span></p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p><span lang="vi">Mã nguồn XT NTFS:</span><span lang="en">XT NTFS source code:</span> <a href="https://github.com/xuanthanhtnt/xt-ntfs">github.com/xuanthanhtnt/xt-ntfs</a></p>
+    <p><span lang="vi">NTFS là thương hiệu của Microsoft Corporation. ntfs-3g © Tuxera và cộng đồng. macFUSE © Benjamin Fleischer.</span><span lang="en">NTFS is a trademark of Microsoft Corporation. ntfs-3g © Tuxera and contributors. macFUSE © Benjamin Fleischer.</span></p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // Language: remember the choice, default from the browser.
+  var root = document.documentElement;
+  var stored = null;
+  try { stored = localStorage.getItem("xt-lang"); } catch (e) {}
+  var lang = stored || ((navigator.language || "").toLowerCase().indexOf("vi") === 0 ? "vi" : "en");
+  function setLang(l) {
+    lang = l;
+    root.setAttribute("data-lang", l);
+    root.setAttribute("lang", l);
+    document.getElementById("lang").textContent = l === "vi" ? "EN" : "VI";
+    document.title = l === "vi" ? "XT NTFS – Ghi ổ NTFS trên Mac" : "XT NTFS – Read-write NTFS for Mac";
+    try { localStorage.setItem("xt-lang", l); } catch (e) {}
+  }
+  setLang(lang);
+  document.getElementById("lang").addEventListener("click", function () { setLang(lang === "vi" ? "en" : "vi"); });
+
+  // Latest release: direct DMG link and version.
+  fetch("https://api.github.com/repos/xuanthanhtnt/xt-ntfs/releases/latest")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (rel) {
+      if (!rel || !rel.assets) return;
+      var dmg = rel.assets.filter(function (a) { return /\.dmg$/.test(a.name); })[0];
+      if (dmg) document.getElementById("download").href = dmg.browser_download_url;
+      var v = (rel.tag_name || "").replace(/^v/, "");
+      var size = dmg ? Math.round(dmg.size / 1048576) + " MB" : "";
+      var line = document.getElementById("release-line");
+      line.innerHTML =
+        '<span lang="vi">Phiên bản ' + v + (size ? ", " + size : "") + '. Dành cho macOS 13 trở lên, chip Apple và Intel. Cần cài macFUSE.</span>' +
+        '<span lang="en">Version ' + v + (size ? ", " + size : "") + '. For macOS 13 or later, Apple silicon and Intel. Requires macFUSE.</span>';
+    })
+    .catch(function () {});
+
+  // Cluster map: a copy being written, once.
+  var map = document.getElementById("map");
+  var led = document.getElementById("led");
+  var cols = 28, rows = 12, n = cols * rows;
+  var cells = [];
+  for (var i = 0; i < n; i++) { var c = document.createElement("i"); map.appendChild(c); cells.push(c); }
+  // Existing content: a few files and the MFT zone.
+  function fill(from, len, cls) { for (var k = from; k < Math.min(n, from + len); k++) cells[k].className = cls; }
+  fill(0, 2, "m"); fill(2, 30, "d"); fill(40, 22, "d"); fill(84, 8, "m"); fill(96, 15, "d");
+  var plan = [];
+  // New files land in free runs; metadata updates go to the MFT zone.
+  [[62, 20], [111, 40], [160, 70], [236, 42]].forEach(function (run, idx) {
+    for (var k = run[0]; k < run[0] + run[1]; k++) plan.push([k, "d"]);
+    plan.push([92 + idx, "m"]);
+  });
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) { plan.forEach(function (p) { cells[p[0]].className = p[1]; }); return; }
+  var step = 0;
+  led.classList.add("busy");
+  function tick() {
+    for (var b = 0; b < 3 && step < plan.length; b++, step++) {
+      var p = plan[step], cell = cells[p[0]];
+      cell.className = "w";
+      (function (cell, cls) { setTimeout(function () { cell.className = cls; }, 140); })(cell, p[1]);
+    }
+    if (step < plan.length) setTimeout(tick, 34);
+    else setTimeout(function () { led.classList.remove("busy"); }, 200);
+  }
+  setTimeout(tick, 500);
+})();
+</script>
+</body>
+</html>

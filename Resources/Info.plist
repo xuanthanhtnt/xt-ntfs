@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>vi</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>XT NTFS</string>
+	<key>CFBundleDisplayName</key>
+	<string>XT NTFS</string>
+	<key>CFBundleExecutable</key>
+	<string>XTNTFS</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.xuanthanhtnt.xtntfs</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 XT NTFS contributors. GPL-2.0-or-later. Includes ntfs-3g by Tuxera and contributors.</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/xuanthanhtnt/xt-ntfs/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>__SPARKLE_PUBLIC_KEY__</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+</dict>
+</plist>

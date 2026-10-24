@@ -1,0 +1,166 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+jobs:
+  engine-tests:
+    name: Engine tests (Linux, FUSE)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q autoconf automake libtool pkg-config fuse3 libgcrypt20-dev
+      - name: Build engine
+        run: engine/build-ntfs3g.sh "$RUNNER_TEMP/xt"
+      - name: Randomized I/O layer stress test (ASan/UBSan, fork, eviction)
+        run: |
+          SRC="$RUNNER_TEMP/xt/.work/src"
+          cc -O2 -g -fsanitize=address,undefined -I"$SRC" -I"$SRC/include/ntfs-3g" -DHAVE_CONFIG_H \
+            engine/tests/rawio_stress.c "$SRC/libntfs-3g/xt_rawio.c" "$SRC/libntfs-3g/unix_io.c" \
+            "$SRC/libntfs-3g/.libs/libntfs-3g.a" -lpthread -o rawio_stress
+          export ASAN_OPTIONS=detect_leaks=0
+          for cfg in "512 64 256" "4096 64 256" "512 1 16" "4096 0 256" "512 2 32"; do
+            set -- $cfg
+            echo "sector=$1 cache=$2MB line=$3KB"
+            XTNTFS_SIMULATE_RAW=$1 XTNTFS_CACHE_MB=$2 XTNTFS_LINE_KB=$3 XTNTFS_FLUSH_MS=20 \
+              ./rawio_stress "$RUNNER_TEMP/scratch.img" 32 15000 1 $RANDOM
+          done
+          XTNTFS_SIMULATE_RAW=512 XTNTFS_SIMULATE_ODIRECT=1 ./rawio_stress "$RUNNER_TEMP/scratch.img" 32 15000 1 7
+      - name: Thread sanitizer
+        run: |
+          SRC="$RUNNER_TEMP/xt/.work/src"
+          cc -O1 -g -fsanitize=thread -I"$SRC" -I"$SRC/include/ntfs-3g" -DHAVE_CONFIG_H \
+            engine/tests/rawio_stress.c "$SRC/libntfs-3g/xt_rawio.c" "$SRC/libntfs-3g/unix_io.c" \
+            "$SRC/libntfs-3g/.libs/libntfs-3g.a" -lpthread -o rawio_tsan
+          XTNTFS_SIMULATE_RAW=512 XTNTFS_CACHE_MB=2 XTNTFS_FLUSH_MS=1 ./rawio_tsan "$RUNNER_TEMP/scratch.img" 16 8000 0 5
+      - name: End-to-end FUSE test
+        run: |
+          sudo -E env "PATH=$PATH" E2E_WORK="$RUNNER_TEMP/e2e" E2E_SIZE_MB=1024 \
+            engine/tests/e2e_linux.sh "$RUNNER_TEMP/xt/bin"
+          sudo -E env "PATH=$PATH" E2E_WORK="$RUNNER_TEMP/e2e4k" E2E_SIZE_MB=512 E2E_SECTOR=4096 \
+            engine/tests/e2e_linux.sh "$RUNNER_TEMP/xt/bin"
+
+  engine-macos:
+    name: Engine (macOS universal)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: brew install autoconf automake libtool pkgconf libgcrypt
+      - name: Fetch macFUSE SDK
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: engine/fetch-macfuse-sdk.sh "$RUNNER_TEMP/macfuse"
+      - name: Build engine
+        env:
+          MACFUSE_PREFIX: ${{ runner.temp }}/macfuse
+        run: engine/build-ntfs3g.sh "$RUNNER_TEMP/engine"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-macos
+          path: ${{ runner.temp }}/engine/bin/
+          if-no-files-found: error
+
+  app:
+    name: App + DMG
+    runs-on: macos-15
+    needs: [engine-macos]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine-macos
+          path: ${{ runner.temp }}/engine
+      - name: Toolchain
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)" || true
+          xcodebuild -version
+          swift --version
+      - name: Unit tests
+        run: swift test
+      - name: Build app
+        run: |
+          chmod +x "$RUNNER_TEMP"/engine/* || true
+          scripts/build-app.sh "$RUNNER_TEMP/engine" build
+      - name: Make DMG
+        id: dmg
+        run: |
+          VERSION="$(cat VERSION | tr -d '[:space:]')"
+          DMG="build/XT-NTFS-$VERSION.dmg"
+          scripts/make-dmg.sh "build/XT NTFS.app" "$DMG"
+          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XT-NTFS-dmg
+          path: ${{ steps.dmg.outputs.dmg }}
+          if-no-files-found: error
+      - name: Check tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          test "${GITHUB_REF_NAME#v}" = "${{ steps.dmg.outputs.version }}" || {
+            echo "Tag $GITHUB_REF_NAME does not match VERSION ${{ steps.dmg.outputs.version }}"; exit 1; }
+      - name: Sign update and create appcast
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          python3 -m pip install --quiet --break-system-packages cryptography || python3 -m pip install --quiet cryptography
+          DMG="${{ steps.dmg.outputs.dmg }}"
+          NAME="$(basename "$DMG")"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${NAME}"
+          python3 scripts/make-appcast.py "$DMG" "${{ steps.dmg.outputs.version }}" "${{ steps.dmg.outputs.build }}" "$URL" build/appcast.xml
+          (cd build && shasum -a 256 "$NAME" > "$NAME.sha256")
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DMG="${{ steps.dmg.outputs.dmg }}"
+          NOTES="build/release-notes.md"
+          python3 scripts/release-notes.py "${{ steps.dmg.outputs.version }}" > "$NOTES"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" build/appcast.xml --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" build/appcast.xml \
+              --title "XT NTFS ${{ steps.dmg.outputs.version }}" --notes-file "$NOTES"
+          fi
+
+  pages:
+    name: Website (GitHub Pages)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="metal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FAFBFD"/>
+      <stop offset="0.55" stop-color="#DDE2EB"/>
+      <stop offset="1" stop-color="#B4BCCB"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8A94AA"/>
+      <stop offset="1" stop-color="#5A647C"/>
+    </linearGradient>
+    <linearGradient id="label" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4C7DFF"/>
+      <stop offset="1" stop-color="#2B45C2"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="96" y="300" width="832" height="470" rx="64" fill="url(#edge)"/>
+    <rect x="96" y="280" width="832" height="440" rx="64" fill="url(#metal)"/>
+    <rect x="99" y="283" width="826" height="434" rx="61" fill="none" stroke="#FFFFFF" stroke-opacity="0.7" stroke-width="4"/>
+  </g>
+  <rect x="160" y="360" width="420" height="150" rx="22" fill="url(#label)"/>
+  <text x="370" y="470" text-anchor="middle" font-family="Inter, 'DejaVu Sans', sans-serif" font-weight="800" font-size="112" fill="#FFFFFF" letter-spacing="6">NTFS</text>
+  <rect x="160" y="560" width="520" height="16" rx="8" fill="#A3ADC2"/>
+  <rect x="160" y="596" width="520" height="16" rx="8" fill="#A3ADC2"/>
+  <rect x="160" y="632" width="520" height="16" rx="8" fill="#A3ADC2"/>
+  <circle cx="830" cy="600" r="24" fill="#33D17A"/>
+  <circle cx="830" cy="600" r="38" fill="#33D17A" opacity="0.25"/>
+</svg>
