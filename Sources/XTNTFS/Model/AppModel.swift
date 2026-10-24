@@ -57,6 +57,8 @@ final class AppModel: ObservableObject {
     private var lastEventID = 0
     private var started = false
     private var usageTasks: [String: Task<Void, Never>] = [:]
+    /// Which volume each usage breakdown belongs to (see forgetStaleUsage).
+    private var usageOwner: [String: String] = [:]
 
     // MARK: Lifecycle
 
@@ -96,6 +98,7 @@ final class AppModel: ObservableObject {
     func rebuild() {
         let list = monitor.volumes(xtMounts: status?.mounts ?? [])
         if list != volumes { volumes = list }
+        forgetStaleUsage(list)
         switch selection {
         case .volume(let id) where list.contains(where: { $0.id == id }):
             break
@@ -344,6 +347,7 @@ final class AppModel: ObservableObject {
     func analyzeUsageIfNeeded(_ v: Volume) {
         guard v.isNTFS, let mp = v.mountPoint, usage[v.bsdName] == nil, usageTasks[v.bsdName] == nil else { return }
         usage[v.bsdName] = UsageBreakdown()
+        usageOwner[v.bsdName] = Self.usageIdentity(v, mountPoint: mp)
         let bsd = v.bsdName
         usageTasks[bsd] = Task.detached(priority: .utility) { [model = self] in
             let result = UsageScanner.scan(mountPoint: mp) { partial in
@@ -356,6 +360,23 @@ final class AppModel: ObservableObject {
     private func finishUsage(bsd: String, result: UsageBreakdown) {
         usage[bsd] = result
         usageTasks[bsd] = nil
+    }
+
+    /// BSD names are reused when disks are swapped: drop a usage breakdown
+    /// once its volume is unmounted or a different volume takes the name.
+    private func forgetStaleUsage(_ list: [Volume]) {
+        for key in Array(usage.keys) where usageTasks[key] == nil {
+            guard let v = list.first(where: { $0.bsdName == key }), let mp = v.mountPoint,
+                  usageOwner[key] == Self.usageIdentity(v, mountPoint: mp) else {
+                usage[key] = nil
+                usageOwner[key] = nil
+                continue
+            }
+        }
+    }
+
+    private static func usageIdentity(_ v: Volume, mountPoint: String) -> String {
+        "\(v.uuid ?? v.name)|\(v.mediaSize)|\(mountPoint)"
     }
 
     /// Commands that unmount the volume (at least for a moment).
