@@ -94,13 +94,33 @@ final class Mounter {
             return state.recordMount(from: existing, profile: state.config.profile)
         }
         guard let desc = watcher.describe(bsd: bsd) else { throw EngineError("Disk \(bsd) was not found.") }
+        // Never take the disk away from another driver if we cannot read it.
+        if let denied = System.deviceAccessError(bsd: bsd) {
+            state.addEvent(.mountFailed, bsd: bsd, volume: desc.volumeName, denied)
+            throw EngineError(denied)
+        }
 
         // Take the device away from any other driver (macOS read-only
         // driver, Paragon, a previous macFUSE mount...).
-        for e in entries(of: bsd) {
+        let previous = entries(of: bsd)
+        for e in previous {
             Log.info("Unmounting \(e.on) (\(e.fsType)) before XT mount")
             if let err = unmountPath(e.on, force: false) {
                 throw EngineError("The volume is in use and could not be unmounted: \(err)")
+            }
+        }
+        // If the XT mount fails, give the volume back to the driver that had
+        // it, so a failed attempt never leaves the disk unmounted.
+        var succeeded = false
+        defer {
+            if !succeeded, let driver = previous.first?.driverName, MountTable.entries(forBSD: bsd).isEmpty {
+                if let err = watcher.mountWithSystem(bsd: bsd) {
+                    Log.warn("Could not return \(bsd) to \(driver): \(err)")
+                } else {
+                    Log.info("Returned \(bsd) to \(driver) after the XT mount failed")
+                    state.addEvent(.info, bsd: bsd, volume: desc.volumeName,
+                                   "XT NTFS could not mount the volume; it was mounted again by the previous driver.")
+                }
             }
         }
         if !System.enginePIDs(bsd: bsd).isEmpty {
@@ -175,7 +195,8 @@ final class Mounter {
         let backends = backendsToTry(config.backend)
         for (i, backend) in backends.enumerated() {
             var opts = options(profile: profile, backend: backend, label: volname,
-                               readOnly: readOnly, windowsNames: config.windowsNames)
+                               readOnly: readOnly, windowsNames: config.windowsNames,
+                               saveAccessTime: prefs.saveAccessTime)
             opts.append(contentsOf: extra)
             // Unprivileged ntfs-3g (FSKit) may only use the character device.
             device = (profile == .compatible && backend != .fskit) ? "/dev/" + bsd : "/dev/r" + bsd
@@ -224,6 +245,7 @@ final class Mounter {
         if !readOnly { prepareVolume(at: mountPoint) }
         applySpotlight(mountPoint: mountPoint, enabled: prefs.spotlight)
 
+        succeeded = true
         state.addEvent(.mounted, bsd: bsd, volume: label,
                        readOnly ? "Mounted read-only." : "Mounted read-write.")
         return ownMount
@@ -237,7 +259,7 @@ final class Mounter {
     }
 
     private func options(profile: PerformanceProfile, backend: FUSEBackend, label: String,
-                         readOnly: Bool, windowsNames: Bool) -> [String] {
+                         readOnly: Bool, windowsNames: Bool, saveAccessTime: Bool) -> [String] {
         let owner = System.consoleUser()
         let escaped = label.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: ",", with: "\\,")
@@ -260,14 +282,15 @@ final class Mounter {
         } else {
             o.append("backend=fskit")
         }
+        o.append(saveAccessTime ? "atime" : "noatime")
         switch profile {
         case .compatible:
             break
         case .balanced:
-            o += ["noatime", "big_writes"]
+            o.append("big_writes")
             if kernel { o += ["noappledouble", "negative_vncache", "iosize=1048576"] }
         case .turbo:
-            o += ["noatime", "big_writes"]
+            o.append("big_writes")
             if kernel { o += ["noappledouble", "negative_vncache", "iosize=8388608"] }
         }
         if windowsNames { o.append("windows_names") }
@@ -386,6 +409,9 @@ final class Mounter {
             }
             return "macFUSE could not be loaded. Allow the macFUSE system extension in System Settings > Privacy & Security (Apple silicon: allow kernel extensions in Startup Security Utility first), or choose the FSKit backend in XT NTFS settings."
         }
+        if lower.contains("operation not permitted") {
+            return System.deviceAccessError(bsd: bsdOf(r)) ?? "macOS blocked XT NTFS from reading this disk. Allow /Library/PrivilegedHelperTools/com.xuanthanhtnt.xtntfs.helper in System Settings › Privacy & Security › Full Disk Access."
+        }
         if lower.contains("hibernat") || lower.contains("fast restart") {
             return "Windows is hibernated or uses Fast Startup. Shut Windows down completely or choose a hibernation option in XT NTFS settings."
         }
@@ -394,6 +420,15 @@ final class Mounter {
         }
         if r.timedOut { return "Mounting timed out." }
         return text.isEmpty ? "ntfs-3g exited with status \(r.status)." : text
+    }
+
+    /// Device named in an ntfs-3g error ("Error opening '/dev/rdisk7s2'").
+    private func bsdOf(_ r: CommandResult) -> String {
+        let text = r.combined
+        guard let range = text.range(of: #"/dev/r?disk[0-9s]+"#, options: .regularExpression) else { return "" }
+        var dev = String(text[range]).replacingOccurrences(of: "/dev/", with: "")
+        if dev.hasPrefix("rdisk") { dev.removeFirst() }
+        return dev
     }
 
     /// Small tweaks that keep macOS from adding work to the volume.
@@ -579,7 +614,7 @@ final class Mounter {
     func applyPrefs(bsd: String?, key: String, old: VolumePrefs, new: VolumePrefs) {
         guard let bsd else { return }
         if let m = xtMount(of: bsd) {
-            if old.readOnly != new.readOnly {
+            if old.readOnly != new.readOnly || old.saveAccessTime != new.saveAccessTime {
                 do {
                     try unmount(bsd: bsd)
                     try mount(bsd: bsd, readOnly: new.readOnly)

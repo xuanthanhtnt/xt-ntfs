@@ -74,11 +74,24 @@ public struct VolumePrefs: Codable, Equatable, Sendable {
     public var readOnly: Bool
     public var noAutoMount: Bool
     public var spotlight: Bool
+    /// Update last-access times on reads (off by default: every read would
+    /// otherwise turn into a metadata write).
+    public var saveAccessTime: Bool
 
-    public init(readOnly: Bool = false, noAutoMount: Bool = false, spotlight: Bool = false) {
+    public init(readOnly: Bool = false, noAutoMount: Bool = false, spotlight: Bool = false,
+                saveAccessTime: Bool = false) {
         self.readOnly = readOnly
         self.noAutoMount = noAutoMount
         self.spotlight = spotlight
+        self.saveAccessTime = saveAccessTime
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        readOnly = try c.decodeIfPresent(Bool.self, forKey: .readOnly) ?? false
+        noAutoMount = try c.decodeIfPresent(Bool.self, forKey: .noAutoMount) ?? false
+        spotlight = try c.decodeIfPresent(Bool.self, forKey: .spotlight) ?? false
+        saveAccessTime = try c.decodeIfPresent(Bool.self, forKey: .saveAccessTime) ?? false
     }
 }
 

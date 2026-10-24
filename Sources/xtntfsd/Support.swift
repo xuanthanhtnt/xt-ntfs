@@ -198,6 +198,19 @@ enum System {
         return enginePIDs(bsd: bsd).isEmpty
     }
 
+    /// Message to show when the helper cannot open the disk, nil if it can.
+    /// macOS privacy protection (TCC, "Removable Volumes") makes open(2)
+    /// fail with EPERM even for root until the helper is allowed in
+    /// Full Disk Access; ntfs-3g reports that EPERM as "hibernated".
+    static func deviceAccessError(bsd: String) -> String? {
+        let fd = open("/dev/" + bsd, O_RDONLY)
+        if fd >= 0 { close(fd); return nil }
+        if errno == EPERM {
+            return "macOS blocked XT NTFS from reading this disk. In System Settings › Privacy & Security › Full Disk Access, add and turn on /Library/PrivilegedHelperTools/com.xuanthanhtnt.xtntfs.helper, then mount again."
+        }
+        return nil  // other errors are reported by the engine
+    }
+
     /// Reads the OEM id of a volume's boot sector ("NTFS    ", "-FVE-FS-", ...).
     static func bootSectorOEM(bsd: String) -> String? {
         let fd = open("/dev/r" + bsd, O_RDONLY)

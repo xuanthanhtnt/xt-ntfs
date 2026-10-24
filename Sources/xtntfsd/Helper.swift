@@ -39,6 +39,11 @@ final class Helper: DiskWatcherDelegate {
         guard config.driverEnabled, System.macFUSEInstalled,
               FileManager.default.isExecutableFile(atPath: System.tool("ntfs-3g")),
               mounter.isNTFS(disk) else { return false }
+        // Let macOS (or another driver) mount it if we cannot read the disk.
+        if let denied = System.deviceAccessError(bsd: disk.bsdName) {
+            Log.warn("Not blocking the system mount of \(disk.bsdName): \(denied)")
+            return false
+        }
         let prefs = config.prefs(forKey: disk.prefsKey)
         if !prefs.noAutoMount { scheduleMount(disk.bsdName) }
         return true

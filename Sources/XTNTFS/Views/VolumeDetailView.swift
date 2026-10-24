@@ -228,6 +228,13 @@ struct VolumeDetailView: View {
     @ViewBuilder
     private var options: some View {
         VStack(alignment: .leading, spacing: 9) {
+            if volume.isNTFS {
+                Toggle(NSLocalizedString("Save Last Access Time", comment: ""), isOn: Binding(
+                    get: { prefs.saveAccessTime },
+                    set: { on in Task { await model.setPrefs(volume) { $0.saveAccessTime = on } } }))
+                    .disabled(busy != nil || !model.helperRunning)
+                    .help(NSLocalizedString("Update the last-access time of files when they are read. Off is faster.", comment: ""))
+            }
             Toggle(NSLocalizedString("Enable Spotlight Indexing", comment: ""), isOn: Binding(
                 get: { volume.isNTFS ? prefs.spotlight : spotlightOnForOther },
                 set: { on in Task { await model.setSpotlight(volume, enabled: on) } }))
