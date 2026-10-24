@@ -123,6 +123,32 @@ jobs:
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Smoke test (launch and screenshot)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHOTS="$RUNNER_TEMP/shots"
+          mkdir -p "$SHOTS"
+          APP="$PWD/build/XT NTFS.app"
+          open "$APP"
+          sleep 15
+          pgrep -fl "XT NTFS.app/Contents/MacOS/XTNTFS" | tee "$SHOTS/processes.txt"
+          screencapture -x "$SHOTS/main.png" || true
+          osascript -e 'quit app "XT NTFS"' || pkill -f "XT NTFS.app/Contents/MacOS/XTNTFS" || true
+          sleep 3
+          open "$APP" --args -XTSelect engine
+          sleep 12
+          screencapture -x "$SHOTS/engine.png" || true
+          pkill -f "XT NTFS.app/Contents/MacOS/XTNTFS" || true
+          cd "$SHOTS"
+          git init -q -b ci-screens
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Screenshots from ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-screens
       - uses: actions/upload-artifact@v4
         with:
           name: XT-NTFS-dmg

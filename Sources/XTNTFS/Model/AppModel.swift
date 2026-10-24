@@ -60,6 +60,8 @@ final class AppModel: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
+        // `-XTSelect engine` opens the engine page (used for screenshots).
+        if UserDefaults.standard.string(forKey: "XTSelect") == "engine" { selection = .engine }
         monitor.onChange = { [weak self] in
             Task { @MainActor in self?.rebuild() }
         }
