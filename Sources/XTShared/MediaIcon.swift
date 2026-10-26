@@ -22,14 +22,14 @@ public enum MediaIcon {
             let p = dir + "/Contents/Resources/" + file
             if FileManager.default.fileExists(atPath: p) { return p }
         }
-        return fallback(internal: (d[kDADiskDescriptionDeviceInternalKey as String] as? Bool) ?? false,
+        return fallback(isInternal: (d[kDADiskDescriptionDeviceInternalKey as String] as? Bool) ?? false,
                         removable: (d[kDADiskDescriptionMediaRemovableKey as String] as? Bool) ?? false)
     }
 
     /// The generic storage icons that ship with macOS.
-    public static func fallback(internal: Bool, removable: Bool) -> String? {
+    public static func fallback(isInternal: Bool, removable: Bool) -> String? {
         let base = "/System/Library/Extensions/IOStorageFamily.kext/Contents/Resources/"
-        let names = internal ? ["Internal.icns"] : removable ? ["Removable.icns", "External.icns"] : ["External.icns"]
+        let names = isInternal ? ["Internal.icns"] : removable ? ["Removable.icns", "External.icns"] : ["External.icns"]
         for n in names where FileManager.default.fileExists(atPath: base + n) { return base + n }
         return nil
     }
