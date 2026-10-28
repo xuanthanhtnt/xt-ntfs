@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## [1.2.1] - 2026-10-28
+
+- **Chỉ chạy trên menu bar khi khởi động:** XT NTFS không tự mở cửa sổ chính hoặc xuất hiện trên Dock; chọn **Mở XT NTFS** vẫn mở cửa sổ ứng dụng.
+- **Mở Cài đặt từ menu bar:** mục **Cài đặt…** mở thẳng cửa sổ Cài đặt, không mở cửa sổ chính.
+
 ## [1.2.0] - 2026-10-25
 
 - **Biểu tượng ổ trong Finder và trên desktop:** ổ mount bằng XT NTFS giờ hiện đúng biểu tượng macOS dùng cho ổ đó (ví dụ ổ USB màu vàng), giống Paragon, thay vì biểu tượng "FUSE" mặc định của macFUSE. Nguyên nhân cũ: macFUSE chỉ nạp mô-đun biểu tượng ổ khi chương trình dùng `fuse_main()`, còn ntfs-3g mount theo cách khác nên tuỳ chọn `volicon` bị bỏ qua. Engine giờ tự nạp mô-đun này; nếu vì lý do nào đó mount kèm biểu tượng thất bại, dịch vụ nền tự mount lại không kèm biểu tượng.

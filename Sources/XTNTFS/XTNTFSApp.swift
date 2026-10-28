@@ -134,6 +134,7 @@ struct XTNTFSApp: App {
                 .environmentObject(model)
                 .onAppear { model.start() }
         }
+        .defaultLaunchBehavior(.suppressed)
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 980, height: 620)
