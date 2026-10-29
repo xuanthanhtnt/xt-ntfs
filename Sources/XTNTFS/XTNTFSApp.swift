@@ -83,6 +83,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
         Notifier.requestAuthorization()
         Task { @MainActor in AppModel.shared.start() }
+        if AppLifecycle.menuBarEnabled {
+            DispatchQueue.main.async { AppLifecycle.moveToMenuBar() }
+        }
         // Closing the main window leaves the app in the menu bar only.
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil,
                                                queue: .main) { note in
@@ -134,7 +137,6 @@ struct XTNTFSApp: App {
                 .environmentObject(model)
                 .onAppear { model.start() }
         }
-        .defaultLaunchBehavior(.suppressed)
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 980, height: 620)

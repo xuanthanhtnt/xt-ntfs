@@ -7,7 +7,6 @@ import XTShared
 struct MenuBarView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
     @ObservedObject var updater: UpdaterBridge
 
     var ntfs: [Volume] { model.volumes.filter { $0.isNTFS } }
@@ -73,7 +72,7 @@ struct MenuBarView: View {
             Menu {
                 Button(NSLocalizedString("Open XT NTFS", comment: "")) { openMain() }
                 Button(NSLocalizedString("Settings…", comment: "")) {
-                    openSettings()
+                    AppActions.openSettings()
                 }
                 Button(NSLocalizedString("Check for Updates…", comment: "")) { updater.checkForUpdates() }
                     .disabled(!updater.canCheckForUpdates)
@@ -270,6 +269,14 @@ struct MenuVolumeCard: View {
         case .readWrite:
             return volume.driverName.map { String(format: NSLocalizedString("Read/write · %@", comment: ""), $0) }
                 ?? NSLocalizedString("Read/write", comment: "")
+        }
+    }
+}
+
+enum AppActions {
+    static func openSettings() {
+        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
         }
     }
 }
