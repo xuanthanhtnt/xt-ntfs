@@ -86,10 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if AppLifecycle.menuBarEnabled {
             DispatchQueue.main.async { AppLifecycle.moveToMenuBar() }
         }
-        // Closing the main window leaves the app in the menu bar only.
+        // Closing the main or Settings window leaves the app in the menu bar only.
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: nil,
                                                queue: .main) { note in
-            guard let w = note.object as? NSWindow, w.identifier?.rawValue.hasPrefix("main") == true,
+            guard let w = note.object as? NSWindow, w.styleMask.contains(.titled),
                   AppLifecycle.menuBarEnabled else { return }
             DispatchQueue.main.async {
                 if !NSApp.windows.contains(where: { $0.isVisible && $0.styleMask.contains(.titled) }) {

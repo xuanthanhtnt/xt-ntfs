@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## [1.2.2] - 2026-10-29
+
+- **Mở Cài đặt từ menu bar:** chuyển ứng dụng sang trạng thái kích hoạt trước khi mở Settings, không đưa cửa sổ chính ra trước; khi đóng Cài đặt, ứng dụng trở về chạy riêng trên menu bar.
+- **Bảng menu bar gọn hơn:** thu nhỏ biểu tượng và thông tin từng ổ, dùng nền native của macOS và bố cục danh sách thay cho các thẻ tối lớn.
+
 ## [1.2.1] - 2026-10-28
 
 - **Chỉ chạy trên menu bar khi khởi động:** XT NTFS không tự mở cửa sổ chính hoặc xuất hiện trên Dock; chọn **Mở XT NTFS** vẫn mở cửa sổ ứng dụng.

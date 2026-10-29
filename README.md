@@ -22,7 +22,7 @@ Cắm ổ cứng, SSD hay USB định dạng trên Windows vào Mac là ổ đư
 - Tuỳ chọn riêng từng ổ: bật lập chỉ mục Spotlight, mount chỉ đọc, không tự động mount
 - Xử lý ổ có Windows đang ngủ đông (Fast Startup) và ổ chưa được tháo an toàn
 - Ba chế độ hiệu năng (Tương thích, Cân bằng, Turbo) và công cụ **đo tốc độ** có lưu lịch sử
-- Chạy trên thanh menu, không hiện trên Dock khi khởi động; mục **Mở XT NTFS** mở cửa sổ chính và **Cài đặt…** mở thẳng cửa sổ cài đặt
+- Chạy trên thanh menu, không hiện trên Dock khi khởi động; bảng ổ đĩa gọn nhẹ theo kiểu Paragon, mục **Mở XT NTFS** mở cửa sổ chính và **Cài đặt…** mở thẳng cửa sổ cài đặt
 - Thông báo, giao diện sáng/tối, tiếng Việt và tiếng Anh
 - Tự cập nhật ngay trong app (Sparkle 2, bản phát hành có chữ ký EdDSA)
 
