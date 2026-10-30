@@ -12,6 +12,18 @@ import XTShared
 enum AppLifecycle {
     static var quitForReal = false
 
+    static var launchDate = Date.distantPast
+    /// macOS opened the app at login (login item or "reopen windows").
+    static var launchedAtLogin = false
+
+    /// At login macOS can open the app a second time (login item plus
+    /// "reopen windows when logging back in"); that arrives as a reopen and
+    /// must not bring up the window and the Dock icon.
+    static var isStartupReopen: Bool {
+        let age = Date().timeIntervalSince(launchDate)
+        return age < 5 || (launchedAtLogin && age < 60)
+    }
+
     static var menuBarEnabled: Bool { UserDefaults.standard.bool(forKey: Prefs.showMenuBar) }
 
     static var mainWindow: NSWindow? {
@@ -78,6 +90,12 @@ final class UpdaterBridge: ObservableObject {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLifecycle.launchDate = Date()
+        if let event = NSAppleEventManager.shared().currentAppleEvent,
+           event.eventID == AEEventID(kAEOpenApplication),
+           event.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue == OSType(keyAELaunchedAsLogInItem) {
+            AppLifecycle.launchedAtLogin = true
+        }
         Prefs.registerDefaults()
         AppearanceManager.apply(UserDefaults.standard.string(forKey: Prefs.appearance) ?? "system")
         UNUserNotificationCenter.current().delegate = self
@@ -113,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // Opened again from Finder, Spotlight or the Dock: show the window.
+        if AppLifecycle.menuBarEnabled && AppLifecycle.isStartupReopen { return false }
         AppLifecycle.showApp()
         return AppLifecycle.mainWindow == nil
     }

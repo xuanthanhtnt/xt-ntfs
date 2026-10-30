@@ -237,6 +237,7 @@
 "External %@" = "Ổ ngoài %@";
 "External" = "Ổ ngoài";
 "%@ free of %@" = "Trống %@ / %@";
+"%@ free" = "Trống %@";
 "Not mounted" = "Chưa mount";
 "Read-only · %@" = "Chỉ đọc · %@";
 "Read-only" = "Chỉ đọc";

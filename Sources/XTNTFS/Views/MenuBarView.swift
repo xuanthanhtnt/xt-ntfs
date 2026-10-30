@@ -14,54 +14,70 @@ struct MenuBarView: View {
         model.volumes.filter { !$0.isNTFS && $0.isEjectable && !$0.isInternal && $0.isMounted && !$0.noBrowse }
     }
 
+    /// Height of the disk list. The menu bar window sizes itself to the
+    /// ScrollView's ideal height, which is zero, so the list is measured and
+    /// the ScrollView gets that height (scrolling only past `maxListHeight`).
+    @State private var listHeight: CGFloat = 0
+    private let maxListHeight: CGFloat = 420
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    if ntfs.isEmpty {
-                        HStack(spacing: 8) {
-                            Image(systemName: "externaldrive.badge.questionmark")
-                                .font(.system(size: 18, weight: .light))
-                                .foregroundStyle(.secondary)
-                            Text(NSLocalizedString("Connect an NTFS disk and it appears here.", comment: ""))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 14)
-                    }
-                    ForEach(ntfs) { v in
-                        MenuVolumeCard(volume: v)
-                    }
-                    if !otherExternal.isEmpty {
-                        sectionTitle(NSLocalizedString("Other Volumes", comment: ""))
-                        ForEach(otherExternal) { v in
-                            MenuVolumeCard(volume: v)
-                        }
-                    }
-                }
-                .padding(.vertical, 5)
+                list
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: ListHeightKey.self, value: geo.size.height)
+                    })
             }
-            .frame(maxHeight: 360)
+            .frame(height: min(max(listHeight, 1), maxListHeight))
+            .onPreferenceChange(ListHeightKey.self) { listHeight = $0 }
             Divider()
             footer
         }
-        .frame(width: 310)
+        .frame(width: 340)
         .background(Color(nsColor: .windowBackgroundColor))
         .foregroundStyle(.primary)
     }
 
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            sectionTitle(NSLocalizedString("NTFS Volumes", comment: ""))
+            if ntfs.isEmpty {
+                HStack(spacing: 10) {
+                    Image(systemName: "externaldrive.badge.questionmark")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundStyle(.secondary)
+                    Text(NSLocalizedString("Connect an NTFS disk and it appears here.", comment: ""))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            ForEach(ntfs) { v in
+                MenuVolumeCard(volume: v)
+            }
+            if !otherExternal.isEmpty {
+                sectionTitle(NSLocalizedString("Other Volumes", comment: ""))
+                ForEach(otherExternal) { v in
+                    MenuVolumeCard(volume: v)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var header: some View {
-        HStack(spacing: 8) {
-            AppGlyph(size: 20)
+        HStack(spacing: 10) {
+            AppGlyph(size: 24)
             VStack(alignment: .leading, spacing: 1) {
-                Text("XT NTFS").font(.system(size: 12, weight: .semibold))
-                HStack(spacing: 4) {
-                    Circle().fill(statusColor).frame(width: 5, height: 5)
+                Text("XT NTFS").font(.system(size: 13, weight: .semibold))
+                HStack(spacing: 5) {
+                    Circle().fill(statusColor).frame(width: 6, height: 6)
                     Text(statusLine)
-                        .font(.system(size: 9.5))
+                        .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -69,32 +85,31 @@ struct MenuBarView: View {
             Spacer()
             Menu {
                 Button(NSLocalizedString("Open XT NTFS", comment: "")) { openMain() }
-                Button(NSLocalizedString("Settings…", comment: "")) {
-                    AppActions.openSettings()
-                }
+                SettingsMenuItem()
                 Button(NSLocalizedString("Check for Updates…", comment: "")) { updater.checkForUpdates() }
                     .disabled(!updater.canCheckForUpdates)
                 Divider()
                 Button(NSLocalizedString("Quit XT NTFS", comment: "")) { AppLifecycle.quit() }
             } label: {
                 Image(systemName: "gearshape.fill")
-                    .font(.system(size: 12))
-                    .frame(width: 24, height: 24)
+                    .font(.system(size: 14))
+                    .frame(width: 26, height: 26)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 9, weight: .semibold))
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 11)
-            .padding(.top, 5)
+            .padding(.horizontal, 14)
+            .padding(.top, 4)
+            .padding(.bottom, 2)
     }
 
     private var footer: some View {
@@ -103,7 +118,7 @@ struct MenuBarView: View {
                 openMain()
             } label: {
                 Label(NSLocalizedString("Open XT NTFS", comment: ""), systemImage: "macwindow")
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 12))
             }
             .buttonStyle(.plain)
             Spacer()
@@ -111,14 +126,14 @@ struct MenuBarView: View {
                 AppLifecycle.quit()
             } label: {
                 Label(NSLocalizedString("Quit XT NTFS", comment: ""), systemImage: "power")
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 12))
             }
             .buttonStyle(.plain)
             .keyboardShortcut("q")
         }
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 11)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private func openMain() {
@@ -154,32 +169,28 @@ struct MenuVolumeCard: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            DriveIcon(volume: volume, size: 30)
+        HStack(spacing: 10) {
+            DriveIcon(volume: volume, size: 38)
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(volume.name)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Spacer(minLength: 3)
+                    Spacer(minLength: 4)
                     Text(connection)
-                        .font(.system(size: 8.5))
+                        .font(.system(size: 10.5))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 6, height: 6)
-                    Text(stateLine)
-                        .font(.system(size: 9))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(Format.size(volume.displaySize))
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 3)
-                    if let os = volume.operatingSystem, !os.isEmpty {
-                        Text(os)
-                            .font(.system(size: 8.5))
+                    Spacer(minLength: 4)
+                    if let free = volume.freeBytes {
+                        Text(String(format: NSLocalizedString("%@ free", comment: ""), Format.size(free)))
+                            .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -189,22 +200,35 @@ struct MenuVolumeCard: View {
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.primary.opacity(0.10))
                             Capsule().fill(Theme.accent)
-                                .frame(width: max(2, geo.size.width * CGFloat(total - free) / CGFloat(total)))
+                                .frame(width: max(3, geo.size.width * CGFloat(total - free) / CGFloat(total)))
                         }
                     }
-                    .frame(height: 3)
+                    .frame(height: 4)
+                    .padding(.vertical, 1)
                 }
-                Text(sizeLine)
-                    .font(.system(size: 8.5))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 6, height: 6)
+                    Text(stateLine)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if let os = volume.operatingSystem, !os.isEmpty {
+                        Text(os)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             }
             actions
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(hovering ? 0.07 : 0)))
-        .padding(.horizontal, 5)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(hovering ? 0.07 : 0)))
+        .padding(.horizontal, 6)
         .onHover { hovering = $0 }
     }
 
@@ -218,7 +242,7 @@ struct MenuVolumeCard: View {
 
     @ViewBuilder
     private var actions: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 4) {
             if let activity = model.busy[volume.bsdName] {
                 ProgressView().controlSize(.small).help(activity)
             } else if volume.isMounted {
@@ -238,15 +262,15 @@ struct MenuVolumeCard: View {
                 }
             }
         }
-        .frame(width: 22)
+        .frame(width: 26)
     }
 
     private func iconButton(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 10))
-                .frame(width: 22, height: 19)
-                .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.06)))
+                .font(.system(size: 12))
+                .frame(width: 26, height: 22)
+                .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.07)))
         }
         .buttonStyle(.plain)
         .help(help)
@@ -259,14 +283,6 @@ struct MenuVolumeCard: View {
             return String(format: NSLocalizedString("External %@", comment: ""), p)
         }
         return NSLocalizedString("External", comment: "")
-    }
-
-    private var sizeLine: String {
-        if let total = volume.totalBytes, let free = volume.freeBytes {
-            return String(format: NSLocalizedString("%@ free of %@", comment: ""),
-                          Format.size(free), Format.size(total))
-        }
-        return Format.size(volume.displaySize)
     }
 
     private var stateLine: String {
@@ -283,18 +299,58 @@ struct MenuVolumeCard: View {
     }
 }
 
-enum AppActions {
-    static func openSettings() {
-        DispatchQueue.main.async {
-            if NSApp.activationPolicy() != .regular {
-                NSApp.setActivationPolicy(.regular)
-            }
-            NSApp.activate(ignoringOtherApps: true)
+private struct ListHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
 
-            if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil),
-               !NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil) {
-                NSLog("XT NTFS: unable to open the Settings window")
+/// "Settings…" in the gear menu. Since macOS 14 the Settings scene only opens
+/// through SwiftUI's `openSettings`; the old `showSettingsWindow:` selector
+/// does nothing there.
+private struct SettingsMenuItem: View {
+    var body: some View {
+        if #available(macOS 14, *) {
+            OpenSettingsButton()
+        } else {
+            Button(NSLocalizedString("Settings…", comment: "")) { AppActions.openSettings() }
+        }
+    }
+
+    @available(macOS 14, *)
+    private struct OpenSettingsButton: View {
+        @Environment(\.openSettings) private var openSettings
+
+        var body: some View {
+            Button(NSLocalizedString("Settings…", comment: "")) {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+                AppActions.bringSettingsToFront()
             }
+        }
+    }
+}
+
+enum AppActions {
+    /// macOS 13: open the Settings scene through the responder chain.
+    static func openSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil),
+           !NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil) {
+            NSLog("XT NTFS: unable to open the Settings window")
+        }
+        bringSettingsToFront()
+    }
+
+    /// The app usually runs without a Dock icon, so the Settings window has
+    /// to be raised explicitly or it can open behind other apps.
+    static func bringSettingsToFront() {
+        DispatchQueue.main.async {
+            guard let w = NSApp.windows.first(where: {
+                $0.identifier?.rawValue.contains("Settings") == true && $0.styleMask.contains(.titled)
+            }) else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            w.makeKeyAndOrderFront(nil)
+            w.orderFrontRegardless()
         }
     }
 }

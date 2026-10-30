@@ -1,5 +1,11 @@
 # Nhật ký thay đổi
 
+## [1.2.3] - 2026-10-30
+
+- **Bảng menu bar hiện danh sách ổ như Paragon:** trước đây danh sách ổ bị co về chiều cao 0 nên bảng chỉ còn phần đầu và nút Mở/Thoát. Giờ bảng liệt kê từng ổ NTFS với biểu tượng, tên, kiểu kết nối, dung lượng, dung lượng trống, thanh dung lượng, trạng thái, hệ điều hành và nút Tháo ổ / Mount; chỉ cuộn khi có nhiều ổ.
+- **Cài đặt… trong menu bar mở đúng cửa sổ Cài đặt:** từ macOS 14 dùng `openSettings` của SwiftUI (cách cũ không còn tác dụng nên app chỉ hiện cửa sổ chính); cửa sổ Cài đặt được đưa lên trước, không hiện biểu tượng Dock.
+- **Khởi động máy chỉ chạy trên menu bar:** bỏ qua lệnh "mở lại" mà macOS gửi lúc đăng nhập (mục mở khi đăng nhập cùng với "mở lại cửa sổ khi đăng nhập"), nên app không còn hiện cửa sổ chính và biểu tượng trên Dock khi khởi động máy.
+
 ## [1.2.2] - 2026-10-29
 
 - **Mở Cài đặt từ menu bar:** chuyển ứng dụng sang trạng thái kích hoạt trước khi mở Settings, không đưa cửa sổ chính ra trước; khi đóng Cài đặt, ứng dụng trở về chạy riêng trên menu bar.
