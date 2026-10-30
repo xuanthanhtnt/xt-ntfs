@@ -62,6 +62,13 @@ done
 perl -0pi -e 's/(\n\tif \(fuse_opt_add_arg\(&args, ""\) == -1\)\n\t\tgoto err;\n)/$1\tif (xt_volicon_args(&args))\n\t\tgoto err;\n/' "$SRC/src/ntfs-3g.c"
 perl -0pi -e 's/(\nstatic struct fuse \*mount_fuse\(char \*parsed_options\)\n)/\n\/* XT NTFS: "-omodules=volicon,iconpath=PATH" for the volume icon. *\/\nstatic int xt_volicon_args(struct fuse_args *args)\n{\n\tconst char *icon = getenv("XTNTFS_VOLICON");\n\tchar *arg;\n\tsize_t n;\n\tint ret;\n\n\tif (!icon || !*icon || strchr(icon, \x27,\x27))\n\t\treturn 0;\n\tn = strlen(icon) + 32;\n\targ = malloc(n);\n\tif (!arg)\n\t\treturn -1;\n\tsnprintf(arg, n, "-omodules=volicon,iconpath=%s", icon);\n\tret = fuse_opt_add_arg(args, arg);\n\tfree(arg);\n\treturn ret == -1 ? -1 : 0;\n}\n$1/' "$SRC/src/ntfs-3g.c"
 [[ "$(grep -c 'xt_volicon_args' "$SRC/src/ntfs-3g.c")" == 2 ]] || { echo "failed to add the volume icon to ntfs-3g.c" >&2; exit 1; }
+# Finder redraws a custom volume icon whenever the root folder's modification
+# time changes (it shows a folder icon meanwhile), so the desktop icon blinked
+# on every write in the root. With the volume icon on, the root keeps the
+# modification time it had when first looked up.
+perl -0pi -e 's/(\nstatic int ntfs_fuse_getattr\(const char \*org_path, struct stat \*stbuf\)\n)/\n\/* XT NTFS: keep the root modification time while the volume icon is on. *\/\nstatic void xt_root_mtime(const ntfs_inode *ni, struct timespec *mtime)\n{\n\tstatic int fixed = -1;\n\tstatic struct timespec root_mtime;\n\tconst char *icon;\n\n\tif (ni->mft_no != FILE_root)\n\t\treturn;\n\tif (fixed < 0) {\n\t\ticon = getenv("XTNTFS_VOLICON");\n\t\tfixed = icon && *icon && !strchr(icon, \x27,\x27);\n\t\troot_mtime = *mtime;\n\t}\n\tif (fixed)\n\t\t*mtime = root_mtime;\n}\n$1/' "$SRC/src/ntfs-3g.c"
+perl -0pi -e 's/(\n\tstbuf->st_mtimespec = ntfs2timespec\(ni->last_data_change_time\);\n)/$1\txt_root_mtime(ni, &stbuf->st_mtimespec);\n/' "$SRC/src/ntfs-3g.c"
+[[ "$(grep -c 'xt_root_mtime' "$SRC/src/ntfs-3g.c")" == 2 ]] || { echo "failed to keep the root modification time in ntfs-3g.c" >&2; exit 1; }
 # Install programs into bin/ and sbin/ under the prefix (not /sbin).
 sed -i.bak 's#\$(DESTDIR)/sbin/#$(DESTDIR)$(sbindir)/#g' \
   "$SRC/ntfsprogs/Makefile.am" "$SRC/src/Makefile.am"

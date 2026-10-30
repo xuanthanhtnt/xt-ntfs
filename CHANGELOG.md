@@ -1,5 +1,9 @@
 # Nhật ký thay đổi
 
+## [1.2.4] - 2026-10-30
+
+- **Biểu tượng ổ trên desktop không còn chớp khi chép hay ghi file:** Finder vẽ lại biểu tượng riêng của ổ (`.VolumeIcon.icns`) mỗi khi ngày sửa đổi của thư mục gốc thay đổi, và trong lúc vẽ lại thì hiện tạm biểu tượng thư mục. Ổ APFS có biểu tượng riêng cũng bị như vậy, nên ổ NTFS mount bằng XT chớp mỗi lần chép file vào thư mục gốc. Engine giờ giữ nguyên ngày sửa đổi của thư mục gốc trong lúc dùng biểu tượng ổ; nội dung thư mục gốc trong Finder vẫn cập nhật ngay khi thêm hoặc xoá file. Cần bấm **Cập nhật engine…** rồi tháo và cắm lại ổ để áp dụng.
+
 ## [1.2.3] - 2026-10-30
 
 - **Bảng menu bar hiện danh sách ổ như Paragon:** trước đây danh sách ổ bị co về chiều cao 0 nên bảng chỉ còn phần đầu và nút Mở/Thoát. Giờ bảng liệt kê từng ổ NTFS với biểu tượng, tên, kiểu kết nối, dung lượng, dung lượng trống, thanh dung lượng, trạng thái, hệ điều hành và nút Tháo ổ / Mount; chỉ cuộn khi có nhiều ổ.
