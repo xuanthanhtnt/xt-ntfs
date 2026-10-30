@@ -1,0 +1,169 @@
+XT NTFS engine installed.
+{
+  "ok": true,
+  "status": {
+    "macFUSEInstalled": false,
+    "engineVersion": "ntfs-3g 2026.9.28 + XT raw I/O",
+    "helperVersion": "1.2.4 (34)",
+    "protocolVersion": 1,
+    "mounts": [],
+    "events": [],
+    "config": {
+      "windowsNames": true,
+      "dirtyPolicy": "verifyBeforeMount",
+      "volumes": {},
+      "hibernatedPolicy": "ask",
+      "profile": "balanced",
+      "backend": "automatic",
+      "driverEnabled": true
+    }
+  }
+}
+{
+  "error": "Invalid disk identifier.",
+  "ok": false
+}
+Started partitioning on disk5
+Unmounting disk
+Creating the partition map
+Waiting for partitions to activate
+Formatting disk5s1 as MS-DOS (FAT32) with name XTTEST
+512 bytes per physical sector
+/dev/rdisk5s1: 3137520 sectors in 392190 FAT32 clusters (4096 bytes/cluster)
+bps=512 spc=8 res=32 nft=2 mid=0xf8 spt=32 hds=255 hid=2048 drv=0x80 bsec=3143680 bspf=3064 rdcl=2 infs=1 bkbs=6
+Mounting disk
+Finished partitioning on disk5
+/dev/disk5 (disk image):
+   #:                       TYPE NAME                    SIZE       IDENTIFIER
+   0:     FDisk_partition_scheme                        +1.6 GB     disk5
+   1:                 DOS_FAT_32 XTTEST                  1.6 GB     disk5s1
+The partition start sector was not specified for /dev/disk5s1 and it could not be obtained automatically.  It has been set to 0.
+The number of sectors per track was not specified for /dev/disk5s1 and it could not be obtained automatically.  It has been set to 0.
+The number of heads was not specified for /dev/disk5s1 and it could not be obtained automatically.  It has been set to 0.
+Cluster size has been automatically set to 4096 bytes.
+To boot from a device, Windows needs the 'partition start sector', the 'sectors per track' and the 'number of heads' to be set.
+Windows will not be able to boot from this device.
+Creating NTFS volume structures.
+mkntfs completed successfully. Have a nice day.
+Mounting volume... OK
+Processing of $MFT and $MFTMirr completed successfully.
+Checking the alternate boot sector... OK
+NTFS volume version is 3.1.
+NTFS partition /dev/disk5s1 was processed successfully.
+Mounting volume... OK
+Processing of $MFT and $MFTMirr completed successfully.
+Checking the alternate boot sector... OK
+NTFS volume version is 3.1.
+NTFS partition /dev/rdisk5s1 was processed successfully.
+{
+  "ok": true,
+  "status": {
+    "events": [],
+    "mounts": [],
+    "macFUSEInstalled": false,
+    "config": {
+      "driverEnabled": true,
+      "hibernatedPolicy": "ask",
+      "backend": "automatic",
+      "windowsNames": true,
+      "dirtyPolicy": "verifyBeforeMount",
+      "volumes": {},
+      "profile": "balanced"
+    },
+    "helperVersion": "1.2.4 (34)",
+    "engineVersion": "ntfs-3g 2026.9.28 + XT raw I/O",
+    "protocolVersion": 1
+  },
+  "output": "Mounting volume... OK\nProcessing of $MFT and $MFTMirr completed successfully.\nChecking the alternate boot sector... OK\nNTFS volume version is 3.1.\nNTFS partition /dev/disk5s1 was processed successfully.\n\nRemount failed: macFUSE is not installed. Install macFUSE to mount NTFS volumes in read-write mode."
+}
+{
+  "status": {
+    "macFUSEInstalled": false,
+    "engineVersion": "ntfs-3g 2026.9.28 + XT raw I/O",
+    "config": {
+      "backend": "automatic",
+      "volumes": {},
+      "hibernatedPolicy": "ask",
+      "windowsNames": true,
+      "profile": "balanced",
+      "driverEnabled": true,
+      "dirtyPolicy": "verifyBeforeMount"
+    },
+    "helperVersion": "1.2.4 (34)",
+    "events": [],
+    "protocolVersion": 1,
+    "mounts": []
+  },
+  "ok": true
+}
+{
+  "ok": true,
+  "output": "Started erase on disk5s1 (XTTEST)\nUnmounting disk\nErasing\nVolume name      : XTEXFAT\nPartition offset : 2048 sectors (1048576 bytes)\nVolume size      : 3143680 sectors (1609564160 bytes)\nBytes per sector : 512\nBytes per cluster: 32768\nFAT offset       : 128 sectors (65536 bytes)\n# FAT sectors    : 384\nNumber of FATs   : 1\nCluster offset   : 512 sectors (262144 bytes)\n# Clusters       : 49112\nVolume Serial #  : 6ae40324\nBitmap start     : 2\nBitmap file size : 6139\nUpcase start     : 3\nUpcase file size : 5836\nRoot start       : 4\nMounting disk\nFinished erase on disk5s1 (XTEXFAT)",
+  "status": {
+    "helperVersion": "1.2.4 (34)",
+    "engineVersion": "ntfs-3g 2026.9.28 + XT raw I/O",
+    "macFUSEInstalled": false,
+    "protocolVersion": 1,
+    "mounts": [],
+    "events": [],
+    "config": {
+      "volumes": {},
+      "backend": "automatic",
+      "profile": "balanced",
+      "hibernatedPolicy": "ask",
+      "dirtyPolicy": "verifyBeforeMount",
+      "driverEnabled": true,
+      "windowsNames": true
+    }
+  }
+}
+{
+  "status": {
+    "events": [],
+    "config": {
+      "dirtyPolicy": "verifyBeforeMount",
+      "volumes": {},
+      "driverEnabled": true,
+      "backend": "automatic",
+      "profile": "balanced",
+      "hibernatedPolicy": "ask",
+      "windowsNames": true
+    },
+    "engineVersion": "ntfs-3g 2026.9.28 + XT raw I/O",
+    "helperVersion": "1.2.4 (34)",
+    "mounts": [],
+    "protocolVersion": 1,
+    "macFUSEInstalled": false
+  },
+  "output": "Cluster size has been automatically set to 4096 bytes.\nCreating NTFS volume structures.\nmkntfs completed successfully. Have a nice day.\n\nThe partition start sector was not specified for /dev/disk5s1 and it could not be obtained automatically.  It has been set to 0.\nThe number of sectors per track was not specified for /dev/disk5s1 and it could not be obtained automatically.  It has been set to 0.\nThe number of heads was not specified for /dev/disk5s1 and it could not be obtained automatically.  It has been set to 0.\nTo boot from a device, Windows needs the 'partition start sector', the 'sectors per track' and the 'number of heads' to be set.\nWindows will not be able to boot from this device.\n\nThe volume was formatted but could not be mounted: macFUSE is not installed. Install macFUSE to mount NTFS volumes in read-write mode.",
+  "ok": true
+}
+{
+  "status": {
+    "engineVersion": "ntfs-3g 2026.9.28 + XT raw I/O",
+    "config": {
+      "profile": "balanced",
+      "hibernatedPolicy": "ask",
+      "volumes": {},
+      "windowsNames": true,
+      "dirtyPolicy": "verifyBeforeMount",
+      "backend": "automatic",
+      "driverEnabled": true
+    },
+    "protocolVersion": 1,
+    "helperVersion": "1.2.4 (34)",
+    "mounts": [],
+    "events": [
+      {
+        "message": "Unmounted. It is safe to disconnect the volume.",
+        "bsdName": "disk5s1",
+        "id": 1793327891837,
+        "date": 1793327910.764035,
+        "kind": "unmounted"
+      }
+    ],
+    "macFUSEInstalled": false
+  },
+  "ok": true
+}
+XT NTFS engine removed.

@@ -1,0 +1,4 @@
+2026-10-30 02:38:11.838 [INFO] XT NTFS helper 1.2.4 (34) starting; engine: ntfs-3g 2026.9.28 + XT raw I/O; macFUSE: not installed
+2026-10-30 02:38:28.188 [WARN] Remount after rename of disk5s1 failed: macFUSE is not installed. Install macFUSE to mount NTFS volumes in read-write mode.
+2026-10-30 02:38:30.764 [INFO] event unmounted disk5s1: Unmounted. It is safe to disconnect the volume.
+2026-10-30 02:38:46.457 [INFO] Helper stopping

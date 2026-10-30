@@ -1,0 +1,28 @@
+{
+  "status": {
+    "engineVersion": "ntfs-3g 2026.9.28 + XT raw I/O",
+    "config": {
+      "profile": "balanced",
+      "hibernatedPolicy": "ask",
+      "volumes": {},
+      "windowsNames": true,
+      "dirtyPolicy": "verifyBeforeMount",
+      "backend": "automatic",
+      "driverEnabled": true
+    },
+    "protocolVersion": 1,
+    "helperVersion": "1.2.4 (34)",
+    "mounts": [],
+    "events": [
+      {
+        "message": "Unmounted. It is safe to disconnect the volume.",
+        "bsdName": "disk5s1",
+        "id": 1793327891837,
+        "date": 1793327910.764035,
+        "kind": "unmounted"
+      }
+    ],
+    "macFUSEInstalled": false
+  },
+  "ok": true
+}
