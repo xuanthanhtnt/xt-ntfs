@@ -3,7 +3,7 @@
 ## [1.2.5] - 2026-11-12
 
 - **Sửa lỗi chép nhiều file và thư mục vào ổ NTFS bằng Finder:** Finder dừng ngay với lỗi -8062, không chép được gì hoặc để lại các file 0 byte. Nguyên nhân là tuỳ chọn `noappledouble` của macFUSE chặn luôn file `.DS_Store`, mà gần như thư mục nào mở bằng Finder cũng có file này. Đã bỏ tuỳ chọn đó; thuộc tính mở rộng vẫn lưu thành stream NTFS nên macOS không tạo file `._`. Thử trên máy thật: 20.020 file trong 1.600 thư mục chép đủ, nội dung trùng khớp.
-- **Giữ thông tin tải về và thẻ màu Finder:** khi bật "Chỉ cho phép tên file Windows chấp nhận", engine từ chối mọi thuộc tính mở rộng có dấu `:` trong tên (ví dụ `com.apple.metadata:kMDItemWhereFroms` của file tải về, `_kMDItemUserTags` của thẻ màu). Finder lặng lẽ bỏ các thông tin này, còn `cp`/`ditto` báo lỗi và bỏ qua file. Quy tắc tên Windows giờ chỉ áp dụng cho tên file và thư mục.
+- **Giữ thông tin tải về và thẻ màu Finder:** khi bật "Chỉ cho phép tên file hợp lệ trên Windows", engine từ chối mọi thuộc tính mở rộng có dấu `:` trong tên (ví dụ `com.apple.metadata:kMDItemWhereFroms` của file tải về, `_kMDItemUserTags` của thẻ màu). Finder lặng lẽ bỏ các thông tin này, còn `cp`/`ditto` báo lỗi và bỏ qua file. Quy tắc tên Windows giờ chỉ áp dụng cho tên file và thư mục.
 - Cần bấm **Cập nhật engine…** rồi tháo và cắm lại ổ để áp dụng.
 
 ## [1.2.4] - 2026-10-30
