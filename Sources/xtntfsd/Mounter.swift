@@ -307,15 +307,18 @@ final class Mounter {
             o.append("backend=fskit")
         }
         o.append(saveAccessTime ? "atime" : "noatime")
+        // No noappledouble: it also refuses .DS_Store, and Finder then stops
+        // copying any folder that has one (error -8062). Extended attributes
+        // are stored as streams, so macOS never needs ._ files here.
         switch profile {
         case .compatible:
             break
         case .balanced:
             o.append("big_writes")
-            if kernel { o += ["noappledouble", "negative_vncache", "iosize=1048576"] }
+            if kernel { o += ["negative_vncache", "iosize=1048576"] }
         case .turbo:
             o.append("big_writes")
-            if kernel { o += ["noappledouble", "negative_vncache", "iosize=8388608"] }
+            if kernel { o += ["negative_vncache", "iosize=8388608"] }
         }
         if windowsNames { o.append("windows_names") }
         if readOnly { o.append("ro") }

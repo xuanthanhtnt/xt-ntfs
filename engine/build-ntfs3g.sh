@@ -69,6 +69,14 @@ perl -0pi -e 's/(\nstatic struct fuse \*mount_fuse\(char \*parsed_options\)\n)/\
 perl -0pi -e 's/(\nstatic int ntfs_fuse_getattr\(const char \*org_path, struct stat \*stbuf\)\n)/\n\/* XT NTFS: keep the root modification time while the volume icon is on. *\/\nstatic void xt_root_mtime(const ntfs_inode *ni, struct timespec *mtime)\n{\n\tstatic int fixed = -1;\n\tstatic struct timespec root_mtime;\n\tconst char *icon;\n\n\tif (ni->mft_no != FILE_root)\n\t\treturn;\n\tif (fixed < 0) {\n\t\ticon = getenv("XTNTFS_VOLICON");\n\t\tfixed = icon && *icon && !strchr(icon, \x27,\x27);\n\t\troot_mtime = *mtime;\n\t}\n\tif (fixed)\n\t\t*mtime = root_mtime;\n}\n$1/' "$SRC/src/ntfs-3g.c"
 perl -0pi -e 's/(\n\tstbuf->st_mtimespec = ntfs2timespec\(ni->last_data_change_time\);\n)/$1\txt_root_mtime(ni, &stbuf->st_mtimespec);\n/' "$SRC/src/ntfs-3g.c"
 [[ "$(grep -c 'xt_root_mtime' "$SRC/src/ntfs-3g.c")" == 2 ]] || { echo "failed to keep the root modification time in ntfs-3g.c" >&2; exit 1; }
+# Extended attributes are stored as named streams, which are not file names.
+# windows_names also refused attribute names with ':', and macOS uses such
+# names for downloads and tags (com.apple.metadata:kMDItemWhereFroms), so
+# copying those files failed and left them empty. Check file names only.
+for f in "$SRC/src/ntfs-3g.c" "$SRC/src/lowntfs-3g.c"; do
+  perl -0pi -e 's/\n\tif \(\(lename_len == -1\)\n\t    \|\| \(ctx->windows_names\n\t\t&& ntfs_forbidden_chars\(lename,lename_len,TRUE\)\)\) \{\n/\n\tif (lename_len == -1) {\n/' "$f"
+  [[ "$(grep -c 'ntfs_forbidden_chars(lename' "$f")" == 0 ]] || { echo "failed to allow attribute names in $f" >&2; exit 1; }
+done
 # Install programs into bin/ and sbin/ under the prefix (not /sbin).
 sed -i.bak 's#\$(DESTDIR)/sbin/#$(DESTDIR)$(sbindir)/#g' \
   "$SRC/ntfsprogs/Makefile.am" "$SRC/src/Makefile.am"
