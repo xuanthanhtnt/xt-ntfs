@@ -65,6 +65,7 @@ Nếu máy đang cài Paragon NTFS, chỉ nên bật một driver: khi driver XT
   - đẩy các yêu cầu lớn thẳng xuống ổ, còn các lần ghi nhỏ vào MFT, chỉ mục và bitmap được gom trong bộ đệm ghi sau rồi một luồng nền ghi theo thứ tự trên đĩa (khi `fsync`, khi unmount và trước `fork()`).
 - **Backend FSKit**: mount qua FSKit phải do người dùng đang đăng nhập thực hiện và không qua được `fork()`, nên dịch vụ tạm giao thiết bị raw cho người dùng đó trong lúc mount và chạy ntfs-3g ở chế độ foreground trong phiên của họ (`launchctl asuser`).
 - **Tuỳ chọn macFUSE** theo chế độ hiệu năng: `iosize` lớn (1 MiB / 8 MiB), `noatime`, `negative_vncache`, thuộc tính mở rộng (kể cả tên có dấu `:` như nguồn tải về, thẻ màu Finder) lưu thành stream NTFS.
+- **Tên file kiểu Mac trên ổ NTFS:** khi bật "Chỉ cho phép tên file hợp lệ trên Windows", ký tự Windows không cho phép (`:` `?` `*` `"` `|` `<` `>` `\`, ký tự điều khiển như trong file `Icon\r`, dấu cách/dấu chấm ở cuối tên) được lưu bằng ký tự Unicode thay thế như macOS và Samba làm khi chép lên máy Windows; Finder vẫn thấy tên gốc.
 
 ### Kiểm thử
 

@@ -77,6 +77,11 @@ for f in "$SRC/src/ntfs-3g.c" "$SRC/src/lowntfs-3g.c"; do
   perl -0pi -e 's/\n\tif \(\(lename_len == -1\)\n\t    \|\| \(ctx->windows_names\n\t\t&& ntfs_forbidden_chars\(lename,lename_len,TRUE\)\)\) \{\n/\n\tif (lename_len == -1) {\n/' "$f"
   [[ "$(grep -c 'ntfs_forbidden_chars(lename' "$f")" == 0 ]] || { echo "failed to allow attribute names in $f" >&2; exit 1; }
 done
+# With windows_names, characters Windows does not allow in file names are
+# stored as private-use characters instead of being refused (src/xt_names.h).
+perl -0pi -e 's/(\nstatic struct fuse_operations ntfs_3g_ops = \{\n)/\n#include "xt_names.h"\n$1/' "$SRC/src/ntfs-3g.c"
+perl -0pi -e 's/(\n\tfh = fuse_new\(ctx->fc, &args , &ntfs_3g_ops, sizeof\(ntfs_3g_ops\), NULL\);\n)/\n#if defined(__APPLE__) || defined(__DARWIN__)\n\tif (ctx->windows_names)\n\t\txt_names_wrap(&ntfs_3g_ops);\n#endif$1/' "$SRC/src/ntfs-3g.c"
+[[ "$(grep -c 'xt_names' "$SRC/src/ntfs-3g.c")" == 2 ]] || { echo "failed to add file name mapping to ntfs-3g.c" >&2; exit 1; }
 # Install programs into bin/ and sbin/ under the prefix (not /sbin).
 sed -i.bak 's#\$(DESTDIR)/sbin/#$(DESTDIR)$(sbindir)/#g' \
   "$SRC/ntfsprogs/Makefile.am" "$SRC/src/Makefile.am"

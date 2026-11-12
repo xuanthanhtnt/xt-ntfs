@@ -1,5 +1,10 @@
 # Nhật ký thay đổi
 
+## [1.2.6] - 2026-11-12
+
+- **Chép được tên file có ký tự Windows không cho phép:** khi bật "Chỉ cho phép tên file hợp lệ trên Windows", trước đây Finder dừng cả lần chép (lỗi -50) nếu gặp thư mục có biểu tượng riêng (file ẩn `Icon\r`), tên có `/` (ví dụ ngày "12/11"), `?`, `*`, `"`, `|`, `<`, `>`, `\`, ký tự điều khiển, hoặc tên kết thúc bằng dấu cách hay dấu chấm. Giờ engine lưu các ký tự này bằng ký tự Unicode thay thế giống macOS và Samba khi chép lên máy Windows (ví dụ `:` → U+F022, `?` → U+F025), nên tên trên ổ vẫn hợp lệ với Windows và Finder vẫn thấy đúng tên gốc. File đã lưu với tên gốc bởi driver khác (Paragon…) vẫn mở, sửa, đổi tên và xoá được. Tên thuộc tính mở rộng và đích của symlink giữ nguyên. Tên thiết bị dành riêng của Windows (`CON`, `AUX`, `NUL`, `COM1`…) vẫn bị từ chối.
+- Cần bấm **Cập nhật engine…** rồi tháo và cắm lại ổ để áp dụng.
+
 ## [1.2.5] - 2026-11-12
 
 - **Sửa lỗi chép nhiều file và thư mục vào ổ NTFS bằng Finder:** Finder dừng ngay với lỗi -8062, không chép được gì hoặc để lại các file 0 byte. Nguyên nhân là tuỳ chọn `noappledouble` của macFUSE chặn luôn file `.DS_Store`, mà gần như thư mục nào mở bằng Finder cũng có file này. Đã bỏ tuỳ chọn đó; thuộc tính mở rộng vẫn lưu thành stream NTFS nên macOS không tạo file `._`. Thử trên máy thật: 20.020 file trong 1.600 thư mục chép đủ, nội dung trùng khớp.
